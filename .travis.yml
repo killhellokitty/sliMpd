@@ -1,0 +1,12 @@
+#.travis.yml
+
+language: php
+php:
+- 5.5
+- 5.4
+- hhvm
+script: phpunit Test.php
+
+addons:
+    code_climate:
+        repo_token: 2338893580d4dc286e90634954341488e6898ccb3d7f7fdd25f041cf03f28cb5
