@@ -50,11 +50,10 @@ abstract class AbstractModel {
 		while($record = $result->fetch_assoc()) {
 			$instance = new $calledClass();
 			$instance->mapArrayToInstance($record);
-			if($singleInstance === FALSE) {
-				$instances[] = $instance;
-			} else {
+			if($singleInstance !== FALSE) {
 				return $instance;
 			}
+			$instances[] = $instance;
 		}
 		return $instances;
 	}
@@ -247,7 +246,7 @@ abstract class AbstractModel {
 		$return = array();
 		$calledClass = get_called_class();
 		#echo $calledClass;
-		foreach(get_class_vars($calledClass) as $classVar => $value) {
+		foreach(array_keys(get_class_vars($calledClass)) as $classVar) {
 			$getter = 'get'.ucfirst($classVar);
 			if($classVar === 'tableName') {
 				continue;
@@ -265,7 +264,15 @@ abstract class AbstractModel {
 	
 	public function insert() {
 		$app = \Slim\Slim::getInstance();
-		
+
+		// automatically add timestamp if possible
+		$setter = 'setAdded';
+		if(method_exists(get_called_class(), $setter)) {
+			$getter = 'getAdded';
+			if($this->$getter() < 1) {
+				$this->$setter(time());
+			}
+		}
 		$mapped = $this->mapInstancePropertiesToDatabaseKeys();
 		$query = 'INSERT INTO '. self::getTableName().' (' . join(",", array_keys($mapped)) . ') VALUES (';
 		foreach($mapped as $value) {
@@ -343,8 +350,9 @@ abstract class AbstractModel {
 	}
 
 	public static function getIdsByString($itemString) {
+		$idForUnknown = 10;
 		if(trim($itemString) === '') {
-			return array("1"); // Unknown
+			return array($idForUnknown); // Unknown
 		}
 		
 		$app = \Slim\Slim::getInstance();
@@ -377,7 +385,7 @@ abstract class AbstractModel {
 			
 			if($az09 === '' || preg_match("/^hash0x([a-f0-9]{7})$/", $az09)) {
 				// TODO: is there a chance to translate strings like HASH(0xa54fe70) to an useable string?
-				$itemIds[1] = 1;
+				$itemIds[$idForUnknown] = $idForUnknown;
 			} else {
 				
 				
@@ -464,7 +472,7 @@ abstract class AbstractModel {
 		return $return;
 	}
 
-	public static function getAll($itemsperPage = 500, $currentPage = 1) {
+	public static function getAll($itemsperPage = 500, $currentPage = 1, $orderBy = "") {
 		$instances = array();
 		if($itemsperPage > 500) {
 			$itemsperPage = 500;
@@ -473,7 +481,16 @@ abstract class AbstractModel {
 		
 		$db = \Slim\Slim::getInstance()->db;
 		$query = "SELECT * FROM ". self::getTableName();
-		$query .= ' ORDER BY title ASC '; // TODO: handle ordering
+		// TODO: validate orderBy. for now use a quick and dirty whitelist
+		switch($orderBy) {
+			case "added desc":
+				$orderBy = " ORDER BY added desc ";
+				break;
+			default:
+				$orderBy = " ORDER BY title ASC ";
+				break;
+		}
+		$query .= $orderBy; // TODO: handle ordering
 		#$query .= ' ORDER BY trackCount DESC '; // TODO: handle ordering
 		$query .= ' LIMIT ' . $itemsperPage * ($currentPage-1) . ','. $itemsperPage ; // TODO: handle limit
 		#echo $query; die();
@@ -509,17 +526,21 @@ abstract class AbstractModel {
 
 		$maxAttempts = 1000;
 		$counter = 0;
-		while (TRUE) {
-			$try = $db->query(
-				"SELECT id FROM ". self::getTableName() ." WHERE id = " . mt_rand(1, $higestId)
-			)->fetch_assoc()['id'];
-			if($try !== NULL) {
-				return self::getInstanceByAttributes( ['id' => $try] );
+		try {
+			while (TRUE) {
+				$try = $db->query(
+					"SELECT id FROM ". self::getTableName() ." WHERE id = " . mt_rand(1, $higestId)
+				)->fetch_assoc()['id'];
+				if($try !== NULL) {
+					return self::getInstanceByAttributes( ['id' => $try] );
+				}
+				if($counter > $maxAttempts) {
+					throw new \Exception("OOPZ! couldn't fetch random instance of " . self::getTableName(), 1);
+				}
+				$counter++;
 			}
-			if($counter > $maxAttempts) {
-				die('sorry - coldn\'t fetch random ' . self::getTableName() );
-			}
-			$counter++;
+		} catch(\Exception $e) {
+			return FALSE;
 		}
 	}
 
