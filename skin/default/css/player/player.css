@@ -173,6 +173,14 @@ hr.player-divider {
 
 .permaplayer-trackmeta {
 	display: table-cell;
+	width: 100%;
+	padding-right: 4em; /* TODO: remove this ugly hack */
+}
+
+.toggle-player-size-wrapper {
+	position: absolute;
+	right: 1em;
+	bottom: 0.5em;
 }
 
 .status-timestring {
@@ -242,4 +250,25 @@ hr.player-divider {
 	right: 0;
 	top: 0;
 	padding-top: 5px;
+}
+
+/* different player height for mobile view */
+@media(max-width:991px){
+	.permaplayer {
+		height: 130px;
+		padding-top: 2em;
+	}
+
+	.status-timestring {
+		width: 136px;
+	}
+
+	.timegrid-wrapper {
+		display: none;
+	}
+
+	.trackmeta-xs {
+		padding-top: 1em;
+		padding-bottom: 2em;
+	}
 }

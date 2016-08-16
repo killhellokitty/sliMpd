@@ -79,7 +79,8 @@ class AlbumMigrator {
 	
 	protected $extractedTrackNumbers;
 	protected $extractedTotalTracks;
-	
+
+	protected $mostRecentAdded = 0;
 	
 	// recommendations
 	protected $r;
@@ -158,9 +159,9 @@ class AlbumMigrator {
 		
 		$a->setRelativePath($this->getRelativeDirectoryPath());
 		$a->setRelativePathHash($this->getRelativeDirectoryPathHash());
-		$a->setAdded($this->getDirectoryMtime());
 		$a->setFilemtime($this->getDirectoryMtime());
-		
+		$a->setAdded($this->mostRecentAdded);
+
 		$a->setTitle($this->mostScored['album']['title']);
 		$a->setYear($this->mostScored['album']['year']);
 		
@@ -239,12 +240,12 @@ class AlbumMigrator {
 		$indexChunks = $this->tracks[$idx]['relativePath'] . " ";
 		
 		if(isset($this->r[$idx]) === TRUE) {
-			foreach($this->r[$idx] as $attrType => $scoreCombo) {
+			foreach($this->r[$idx] as $scoreCombo) {
 				$indexChunks .= join(" ", array_keys($scoreCombo)) . " ";
 			}
 		}
 		if(isset($this->r['album']) === TRUE) {
-			foreach($this->r['album'] as $attrType => $scoreCombo) {
+			foreach($this->r['album'] as $scoreCombo) {
 				$indexChunks .= join(" ", array_keys($scoreCombo)) . " ";
 			}
 		}
@@ -424,8 +425,10 @@ class AlbumMigrator {
 			$this->titleSchemes[$idx] = $this->getArtistOrTitleScheme($t['title'], $idx, 'title');
 			$this->albumSchemes[$idx] = $this->getAlbumScheme($t['album'], $idx);
 			$this->numberSchemes[$idx] = $this->getNumberScheme($t['trackNumber'], $idx);
-			
-			
+
+			// album gets the most recent timestamp of all tracks for attribute "added"
+			$this->mostRecentAdded = ($t['added'] > $this->mostRecentAdded) ? $t['added'] : $this->mostRecentAdded;
+
 			// add score for real unmodified attributes
 			$this->scoreAttribute($idx, 'artist',    $t['artist'], $this->defaultScoreForRealTagAttrs);
 			$this->scoreAttribute($idx, 'artist',    $t['albumArtist'], $this->defaultScoreForRealTagAttrs);
@@ -791,7 +794,7 @@ class AlbumMigrator {
 	}
 	
 	private function scoreAllTracksWithAttribute($attrName, $attrValue, $score = 1) {
-		foreach($this->tracks as $idx => $bla) {
+		foreach(array_keys($this->tracks) as $idx) {
 			$this->scoreAttribute($idx, $attrName, $attrValue, $score);
 		}
 	}
