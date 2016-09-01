@@ -3,7 +3,6 @@ namespace Slimpd\Models;
 
 class Genre extends \Slimpd\Models\AbstractModel
 {
-	protected $id;
 	protected $title;
 	protected $parent;
 	protected $az09;
@@ -37,9 +36,6 @@ class Genre extends \Slimpd\Models\AbstractModel
 	}
 
 	//setter
-	public function setId($value) {
-		$this->id = $value;
-	}
 	public function setTitle($value) {
 		$this->title = $value;
 	}
@@ -57,9 +53,6 @@ class Genre extends \Slimpd\Models\AbstractModel
 	}
 
 	// getter
-	public function getId() {
-		return $this->id;
-	}
 	public function getTitle() {
 		return $this->title;
 	}
@@ -78,7 +71,6 @@ class Genre extends \Slimpd\Models\AbstractModel
 
 	public static function parseGenreStringAdvanced($itemString) {
 		$app = \Slim\Slim::getInstance();
-		$classPath = get_called_class();
 		$finalGenres = array();
 		$badChunk = FALSE;
 		cliLog("----------GENRE-PARSER----------", 6);
@@ -124,7 +116,7 @@ class Genre extends \Slimpd\Models\AbstractModel
 			cliLog("  nothing to do with an emtpy string.", 7);
 			return;
 		}
-		if(preg_match("/^hash0x([a-f0-9]{7})$/", az09($itemString))) {
+		if(isHash($itemString) === TRUE) {
 			// TODO: is there a chance to translate strings like HASH(0xa54fe70) to an useable string?
 			// TODO: read from config: "importer.unknowngenre"
 			$finalGenres['unknown'] = "Unknown";
@@ -183,6 +175,7 @@ class Genre extends \Slimpd\Models\AbstractModel
 	public static function parseGenreStringPhase4($app, &$itemString, &$finalGenres, &$badChunk) {
 		cliLog(" Phase 4: check remaining chunks", 6);
 		$classPath = get_called_class();
+		$tmpGlue = "tmpGlu3";
 		#print_r($app->config['genre-replace-chunks']); die();
 		// phase 4: tiny chunks
 		# TODO: would camel-case splitting make sense?
@@ -216,6 +209,7 @@ class Genre extends \Slimpd\Models\AbstractModel
 	public static function parseGenreStringPhase5($app, &$itemString, &$finalGenres, &$badChunk) {
 		cliLog(" Phase 5: check remaining chunks after replacement and removal", 6);
 		$classPath = get_called_class();
+		$tmpGlue = "tmpGlu3";
 		$splitBy = array_merge($app->config['genre-glue'], array(" ", "-", ".", "_", ""));
 		$badChunk = FALSE;
 		$chunks = trimExplode($tmpGlue, str_ireplace($splitBy, $tmpGlue, $itemString), TRUE);
@@ -227,15 +221,15 @@ class Genre extends \Slimpd\Models\AbstractModel
 		}
 		$joinedChunkRest = strtolower(join(".", $chunks));
 		
-		if(isset($app->importerCache[$classPath]["preserved"][$joinedChunkRest]) === TRUE) {
-			$finalGenres[az09($joinedChunkRest)] = $app->importerCache[$classPath]["preserved"][$joinedChunkRest];
-			cliLog("  found genre based on full preserved pattern: $joinedChunkRest = ".$app->importerCache[$classPath]["preserved"][$joinedChunkRest], 7);
+		if(isset($app->importerCache[$classPath]["preserve"][$joinedChunkRest]) === TRUE) {
+			$finalGenres[az09($joinedChunkRest)] = $app->importerCache[$classPath]["preserve"][$joinedChunkRest];
+			cliLog("  found genre based on full preserved pattern: $joinedChunkRest = ".$app->importerCache[$classPath]["preserve"][$joinedChunkRest], 7);
 			return $finalGenres;
 		}
 
 		cliLog("  REMAINING CHUNKS:" . $joinedChunkRest, 7);
 		$foundPreservedMatch = FALSE;
-		foreach($app->importerCache[$classPath]["preserved"] as $preserve => $genreString) {
+		foreach($app->importerCache[$classPath]["preserve"] as $preserve => $genreString) {
 			if(preg_match("/".str_replace(".", "\.", $preserve) . "/", $joinedChunkRest)) {
 				$finalGenres[az09($preserve)] = $genreString;
 				$foundPreservedMatch = TRUE;

@@ -9,7 +9,7 @@ foreach(['/album', '/markup/albumtracks', '/markup/widget-album'] as $what) {
 			return;
 		}
 		$vars['itemlist'] = \Slimpd\Models\Track::getInstancesByAttributes(
-			['albumId' => $albumId], FALSE, 200, 1, 'number ASC'
+			['albumId' => $albumId], FALSE, 200, 1, 'trackNumber ASC'
 		);
 		$vars['renderitems'] = getRenderItems($vars['album'], $vars['itemlist']);
 		$vars['albumimages'] = [];
@@ -21,7 +21,7 @@ foreach(['/album', '/markup/albumtracks', '/markup/widget-album'] as $what) {
 		foreach($bitmaps as $bitmap) {
 			switch($bitmap->getPictureType()) {
 				case 'front':
-					if($foundFront === TRUE && $app->config['images']['hide_front_duplicates'] == '1') {
+					if($foundFront === TRUE && $app->config['images']['hide_front_duplicates'] === '1') {
 						continue;
 					}
 					$vars['albumimages'][] = $bitmap;
@@ -36,7 +36,7 @@ foreach(['/album', '/markup/albumtracks', '/markup/widget-album'] as $what) {
 			}
 		}
 		
-		$vars['breadcrumb'] = \Slimpd\filebrowser::fetchBreadcrumb($vars['album']->getRelativePath());
+		$vars['breadcrumb'] = \Slimpd\filebrowser::fetchBreadcrumb($vars['album']->getRelPath());
 		
 		if($what === '/markup/widget-album') {
 			$app->render('modules/widget-album.htm', $vars);
@@ -47,7 +47,26 @@ foreach(['/album', '/markup/albumtracks', '/markup/widget-album'] as $what) {
 	});
 }
 
+// stringlist of artist|label|genre
+$app->get("/albums/page/:currentPage/sort/:sort/:direction", function($currentPage, $sort, $direction) use ($app, $vars) {
+	$vars["action"] = "albums";
+	$vars["itemlist"] = [];
+	$itemsPerPage = 18;
 
+	$vars['itemlist'] = \Slimpd\Models\Album::getAll($itemsPerPage, $currentPage, $sort . " " . $direction);
+	$vars["totalresults"] = \Slimpd\Models\Album::getCountAll();
+	$vars["activesorting"] = $sort . "-" . $direction;
+
+	$vars["paginator"] = new JasonGrimes\Paginator(
+		$vars["totalresults"],
+		$itemsPerPage,
+		$currentPage,
+		$app->config["root"] ."albums/page/(:num)/sort/".$sort."/".$direction
+	);
+	$vars["paginator"]->setMaxPagesToShow(paginatorPages($currentPage));
+	$vars['renderitems'] = getRenderItems($vars['itemlist']);
+	$app->render('surrounding.htm', $vars);
+});
 
 $app->get('/maintainance/albumdebug/:itemParams+', function($itemParams) use ($app, $vars){
 	$vars['action'] = 'maintainance.albumdebug';
@@ -90,7 +109,7 @@ $app->get('/maintainance/albumdebug/:itemParams+', function($itemParams) use ($a
 		 * 
 		 */
 		
-		$discogsItem = new \Slimpd\Discogsitem($discogsId);
+		$discogsItem = new \Slimpd\Models\Discogsitem($discogsId);
 		$vars['matchmapping'] = $discogsItem->guessTrackMatch($vars['itemlistraw']);
 		$vars['discogstracks'] = $discogsItem->trackstrings;
 		$vars['discogsalbum'] = $discogsItem->albumAttributes;

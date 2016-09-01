@@ -25,8 +25,8 @@ namespace Slimpd\Modules;
  */
 
 class AlbumMigrator {
-	protected $relativeDirectoryPathHash;
-	protected $relativeDirectoryPath;
+	protected $relDirPathHash;
+	protected $relDirPath;
 	public $directoryMtime;
 
 	protected $tracks;
@@ -87,7 +87,7 @@ class AlbumMigrator {
 
 	// attribute with highest score from recommendations
 	protected $mostScored = array();
-	protected $defaultScoreForRealTagAttrs = 5;
+	protected $scoreForRealTags = 5;
 
 	
 	private function getMostScored($idx, $attrName) {
@@ -108,25 +108,17 @@ class AlbumMigrator {
 		return $highestScore[$index];		 
 	}
 
-	
-
-
-
-	
 	public function run() {
-
-		
-
 		// first of all - try to guess if this dir should be
 		// treated as an album or as a bunch of loose tracks
 		// further this method is adding score to several attributes which will be migrated to production db-table
 		$this->setHandleAsAlbum();
 		#print_r($this->r);
 
-		cliLog("handleAsAlbumScore " . $this->handleAsAlbumScore , 3, 'purple'); #die();
+		cliLog("handleAsAlbum " . (($this->handleAsAlbum)?"yes":"no") . " (SCORE: ".$this->handleAsAlbumScore.")", 3, 'purple');
 
 		
-		#if($this->tracks[0]['relativePath'] == 'newroot/crse002cd--Calibre-Musique_Concrete-2CD-CRSE002CD-2001-sour/101-calibre-deep_everytime.mp3') {
+		#if($this->tracks[0]['relPath'] == 'newroot/crse002cd--Calibre-Musique_Concrete-2CD-CRSE002CD-2001-sour/101-calibre-deep_everytime.mp3') {
 			#print_r($this->r); die();
 		#}
 
@@ -157,15 +149,15 @@ class AlbumMigrator {
 		#$album->setLabelId(join(",", Label::getIdsByString($mergedFromTracks['label'])));
 		$album->setCatalogNr($this->mostScored['album']['catalogNr']);
 
-		$album->setRelativePath($this->getRelativeDirectoryPath());
-		$album->setRelativePathHash($this->getRelativeDirectoryPathHash());
+		$album->setRelPath($this->getRelDirPath());
+		$album->setRelPathHash($this->getRelDirPathHash());
 		$album->setFilemtime($this->getDirectoryMtime());
 		$album->setAdded($this->mostRecentAdded);
 
 		$album->setTitle($this->mostScored['album']['title']);
 		$album->setYear($this->mostScored['album']['year']);
 
-		$album->setIsJumble(($this->handleAsAlbum === TRUE) ? 0:1);
+		$album->setIsJumble(($this->handleAsAlbum === 1) ? 0:1);
 
 		$album->setTrackCount(count($this->tracks));
 
@@ -181,12 +173,8 @@ class AlbumMigrator {
 
 		foreach($this->tracks as $idx => $rawTagData) {
 			$track = $this->migrateNonGuessableData($rawTagData);
-
-			
-
 			$track->setArtistId($this->mostScored[$idx]['artist']); // currently the string insted of an artistId
 			$track->setTitle($this->mostScored[$idx]['title']);
-
 			$track->setFeaturedArtistsAndRemixers();
 				# setFeaturedArtistsAndRemixers() is processing:
 				# $t->setArtistId();
@@ -195,19 +183,11 @@ class AlbumMigrator {
 
 			$track->setGenreId(join(",", \Slimpd\Models\Genre::getIdsByString($this->getMostScored($idx, 'genre'))));
 			$track->setLabelId(join(",", \Slimpd\Models\Label::getIdsByString($this->getMostScored($idx, 'label'))));
-
 			$track->setCatalogNr($this->mostScored[$idx]['catalogNr']);
-
 			$track->setDisc($this->mostScored[$idx]['disc']);
-			$track->setNumber($this->mostScored[$idx]['number']);
-
+			$track->setTrackNumber($this->mostScored[$idx]['trackNumber']);
 			$track->setComment($this->mostScored[$idx]['comment']);
 			$track->setYear($this->mostScored[$idx]['year']);
-
-			
-
-			
-
 			$track->setAlbumId($albumId);
 
 			// make sure to use identical ids in table:rawtagdata and table:track
@@ -216,28 +196,23 @@ class AlbumMigrator {
 
 			// make sure extracted images will be referenced to an album
 			\Slimpd\Models\Bitmap::addAlbumIdToTrackId($track->getId(), $albumId);#
-
 			
 			// add the whole bunch of valid and indvalid attributes to trackindex table
 			$this->updateTrackIndex($track->getId(), $idx);
-
 		}
 
 		unset($this->r['album']);
 
 		if($this->handleAsAlbum === TRUE) {
-
 			// try to guess if all tracks of this album has obviously invalid fixable attributes
-
 		} 
 
 		return;
 		#print_r($this->r); die();
-
 	}
 
 	private function updateTrackIndex($trackId, $idx) {
-		$indexChunks = $this->tracks[$idx]['relativePath'] . " ";
+		$indexChunks = $this->tracks[$idx]['relPath'] . " ";
 
 		if(isset($this->r[$idx]) === TRUE) {
 			foreach($this->r[$idx] as $scoreCombo) {
@@ -254,7 +229,7 @@ class AlbumMigrator {
 		$indexChunks .= str_replace(
 			array('/', '_', '-', '.'),
 			' ',
-			$this->tracks[$idx]['relativePath']
+			$this->tracks[$idx]['relPath']
 		);
 		// make sure to use identical ids in table:trackindex and table:track
 		\Slimpd\Models\Trackindex::ensureRecordIdExists($trackId);
@@ -268,7 +243,7 @@ class AlbumMigrator {
 
 
 	private function updateAlbumIndex($albumId) {
-		$indexChunks = $this->tracks[0]['relativeDirectoryPath'] . " ";
+		$indexChunks = $this->tracks[0]['relDirPath'] . " ";
 		if(isset($this->r['album']) === TRUE) {
 			foreach($this->r['album'] as $scoreCombo) {
 				$indexChunks .= join(" ", array_keys($scoreCombo)) . " ";
@@ -278,7 +253,7 @@ class AlbumMigrator {
 		$indexChunks .= str_replace(
 			array('/', '_', '-', '.'),
 			' ',
-			$this->tracks[0]['relativeDirectoryPath']
+			$this->tracks[0]['relDirPath']
 		);
 		// make sure to use identical ids in table:trackindex and table:track
 		\Slimpd\Models\Albumindex::ensureRecordIdExists($albumId);
@@ -294,24 +269,23 @@ class AlbumMigrator {
 	 * no guessing - if value seems reasonable or not - required
 	 */
 	public function migrateNonGuessableData($rawArray) {
-
 		$track = new \Slimpd\Models\Track();
 		$track->setId($rawArray['id']);
-		$track->setRelativePath($rawArray['relativePath']);
-		$track->setRelativePathHash($rawArray['relativePathHash']);
-		$track->setDirectoryPathHash($rawArray['relativeDirectoryPathHash']);
+		$track->setRelPath($rawArray['relPath']);
+		$track->setRelPathHash($rawArray['relPathHash']);
+		$track->setRelDirPathHash($rawArray['relDirPathHash']);
 		$track->setFingerprint($rawArray['fingerprint']);
 		$track->setMimeType($rawArray['mimeType']);
 		$track->setFilesize($rawArray['filesize']);
 		$track->setFilemtime($rawArray['filemtime']);
 		$track->setMiliseconds(round($rawArray['miliseconds']*1000));
 		$track->setAudioDataformat($rawArray['audioDataformat']);
-		$track->setAudioCompressionRatio($rawArray['audioCompressionRatio']);
+		$track->setAudioComprRatio($rawArray['audioComprRatio']);
 		$track->setAudioEncoder(($rawArray['audioEncoder']) ? $rawArray['audioEncoder'] : 'Unknown encoder');
 		if ($rawArray['audioLossless']) {
 			$track->setAudioLossless($rawArray['audioLossless']);
 			$track->setAudioProfile('Lossless compression');
-			if ($rawArray['audioCompressionRatio'] == 1) {
+			if ($rawArray['audioComprRatio'] == 1) {
 				$track->setAudioProfile('Lossless');
 			}
 		}
@@ -345,7 +319,7 @@ class AlbumMigrator {
 			'catalogNr',
 			'label',
 			'source',
-			'number',
+			'trackNumber',
 			'disc',
 			'genre',
 			'comment',
@@ -359,7 +333,6 @@ class AlbumMigrator {
 
 		}
 		$rgx = new \Slimpd\RegexHelper();
-
 		
 		// last fixes :)                                   hopefully...
 		foreach($this->mostScored as $idx => $item) {
@@ -370,19 +343,19 @@ class AlbumMigrator {
 			// remove artist from title in case title starts with artists
 			// A: Little Legends, The
 			// T: Little Legends, The - Swamp Walk
-			if($item['artist'] !== '' && preg_match("/^". preg_quote($item['artist'], "/").$rgx->glue ."(.{5,})/i", $item['title'], $m)) {
+			if($item['artist'] !== '' && preg_match("/^". preg_quote($item['artist'], "/").$rgx->glue ."(.{5,})/i", $item['title'], $matches)) {
 				#print_r($item); #die();
-				$this->mostScored[$idx]['title'] = remU($m[1]);
+				$this->mostScored[$idx]['title'] = remU($matches[1]);
 			}
 
 			// in case album:title == artist take 2nd scored
 			//if($this->tracks[$idx]['artist'] == $item['album']
 			//&& $this->tracks[$idx]['artist'] !== ''
-			//&& preg_match("/^".$rgx->noMinus.$rgx->glue .preg_quote($item['title'], "/")."$/i", $this->tracks[$idx]['title'], $m)) {
-			//	print_r($m); #die();
+			//&& preg_match("/^".$rgx->noMinus.$rgx->glue .preg_quote($item['title'], "/")."$/i", $this->tracks[$idx]['title'], $matches)) {
+			//	print_r($matches); #die();
 			//	// match -> neuer artist
 			//	#print_r($this->r[$idx]); die();
-			//	$this->mostScored[$idx]['artist'] = trim($m[1]); 
+			//	$this->mostScored[$idx]['artist'] = trim($matches[1]); 
 			//}
 		}
 	}
@@ -393,61 +366,60 @@ class AlbumMigrator {
 
 
 		// collect specific data for comparison
-		foreach($this->tracks as $idx => $t) {
+		foreach($this->tracks as $idx => $track) {
 
-			$this->artists[$idx] = $t['artist'];
-			$this->albums[$idx] = $t['album'];
-			$this->albumArtists[$idx] = $t['albumArtist'];
-			$this->genres[$idx] = $t['genre'];
-			$this->comments[$idx] = $t['comment'];
-			$this->years[$idx] = $t['year'];
-			$this->labels[$idx] = $t['publisher'];
-			$this->catalogNumbers[$idx] = $t['textCatalogNumber'];
-			$this->discogsReleaseIds[$idx] = $t['textDiscogsReleaseId'];
-			$this->sources[$idx] = $t['textSource'];
-			$this->urls[$idx] = $t['textUrlUser'];
+			$this->artists[$idx] = $track['artist'];
+			$this->albums[$idx] = $track['album'];
+			$this->albumArtists[$idx] = $track['albumArtist'];
+			$this->genres[$idx] = $track['genre'];
+			$this->comments[$idx] = $track['comment'];
+			$this->years[$idx] = $track['year'];
+			$this->labels[$idx] = $track['publisher'];
+			$this->catalogNumbers[$idx] = $track['catalogNr'];
+			$this->discogsReleaseIds[$idx] = $track['textDiscogsReleaseId'];
+			$this->sources[$idx] = $track['textSource'];
+			$this->urls[$idx] = $track['textUrlUser'];
 
-			$this->mimeTypes[$idx] = $t['mimeType'];
-			$this->audioBitrates[$idx] = $t['audioBitrate'];
-			$this->audioBitrateModes[$idx] = $t['audioBitrateMode'];
-			$this->audioSampleRates[$idx] = $t['audioSampleRate'];
-			$this->audioDataformats[$idx] = $t['audioDataformat'];
-			$this->audioEncoders[$idx] = $t['audioEncoder'];
-			$this->audioLosslesss[$idx] = $t['audioLossless'];
+			$this->mimeTypes[$idx] = $track['mimeType'];
+			$this->audioBitrates[$idx] = $track['audioBitrate'];
+			$this->audioBitrateModes[$idx] = $track['audioBitrateMode'];
+			$this->audioSampleRates[$idx] = $track['audioSampleRate'];
+			$this->audioDataformats[$idx] = $track['audioDataformat'];
+			$this->audioEncoders[$idx] = $track['audioEncoder'];
+			$this->audioLosslesss[$idx] = $track['audioLossless'];
 
-			$this->totalTrackss[$idx] = $t['totalTracks'];
+			$this->totalTrackss[$idx] = $track['totalTracks'];
 
-			$this->filenameCases[$idx] = $this->getFilenameCase( basename($t['relativePath']) );
+			$this->filenameCases[$idx] = $this->getFilenameCase( basename($track['relPath']) );
 
-			$this->filenameSchemes[$idx] = $this->getFilenameScheme( basename($t['relativePath']), $idx);
-			$this->artistSchemes[$idx] = $this->getArtistOrTitleScheme($t['artist'], $idx, 'artist'); // we can use the same
-			$this->titleSchemes[$idx] = $this->getArtistOrTitleScheme($t['title'], $idx, 'title');
-			$this->albumSchemes[$idx] = $this->getAlbumScheme($t['album'], $idx);
-			$this->numberSchemes[$idx] = $this->getNumberScheme($t['trackNumber'], $idx);
+			$this->filenameSchemes[$idx] = $this->getFilenameScheme( basename($track['relPath']), $idx);
+			$this->artistSchemes[$idx] = $this->getArtistOrTitleScheme($track['artist'], $idx, 'artist'); // we can use the same
+			$this->titleSchemes[$idx] = $this->getArtistOrTitleScheme($track['title'], $idx, 'title');
+			$this->albumSchemes[$idx] = $this->getAlbumScheme($track['album'], $idx);
+			$this->numberSchemes[$idx] = $this->getNumberScheme($track['trackNumber'], $idx);
 
 			// album gets the most recent timestamp of all tracks for attribute "added"
-			$this->mostRecentAdded = ($t['added'] > $this->mostRecentAdded) ? $t['added'] : $this->mostRecentAdded;
+			$this->mostRecentAdded = ($track['added'] > $this->mostRecentAdded) ? $track['added'] : $this->mostRecentAdded;
 
 			// add score for real unmodified attributes
-			$this->scoreAttribute($idx, 'artist',    $t['artist'], $this->defaultScoreForRealTagAttrs);
-			$this->scoreAttribute($idx, 'artist',    $t['albumArtist'], $this->defaultScoreForRealTagAttrs);
-			$this->scoreAttribute($idx, 'title',     $t['title'], $this->defaultScoreForRealTagAttrs);
-			$this->scoreAttribute($idx, 'genre',     $t['genre'], $this->defaultScoreForRealTagAttrs);
-			$this->scoreAttribute($idx, 'comment',   $t['comment'], $this->defaultScoreForRealTagAttrs);
-			$this->scoreAttribute($idx, 'year',      $t['year'], $this->defaultScoreForRealTagAttrs);
-			$this->scoreAttribute($idx, 'label',     $t['publisher'], $this->defaultScoreForRealTagAttrs);
-			$this->scoreAttribute($idx, 'catalogNr', $t['textCatalogNumber'], $this->defaultScoreForRealTagAttrs);
-			$this->scoreAttribute($idx, 'discogsId', $t['textDiscogsReleaseId'], $this->defaultScoreForRealTagAttrs);
-			$this->scoreAttribute($idx, 'source',    $t['textSource'], $this->defaultScoreForRealTagAttrs);
-			$this->scoreAttribute($idx, 'urlUser',   $t['textUrlUser'], $this->defaultScoreForRealTagAttrs);
-			$this->scoreAttribute('album', 'title',  $t['album'], $this->defaultScoreForRealTagAttrs);
-			$this->scoreAttribute('album', 'artist', $t['albumArtist'], $this->defaultScoreForRealTagAttrs);
-			$this->scoreAttribute('album', 'artist', $t['artist'], $this->defaultScoreForRealTagAttrs);
-
-
-			
+			$this->scoreAttribute($idx, 'artist',    $track['artist'], $this->scoreForRealTags);
+			$this->scoreAttribute($idx, 'artist',    $track['albumArtist'], $this->scoreForRealTags);
+			$this->scoreAttribute($idx, 'title',     $track['title'], $this->scoreForRealTags);
+			$this->scoreAttribute($idx, 'genre',     $track['genre'], $this->scoreForRealTags);
+			$this->scoreAttribute($idx, 'comment',   $track['comment'], $this->scoreForRealTags);
+			$this->scoreAttribute($idx, 'year',      $track['year'], $this->scoreForRealTags);
+			$this->scoreAttribute($idx, 'label',     $track['publisher'], $this->scoreForRealTags);
+			$this->scoreAttribute($idx, 'catalogNr', $track['catalogNr'], $this->scoreForRealTags);
+			$this->scoreAttribute($idx, 'discogsId', $track['textDiscogsReleaseId'], $this->scoreForRealTags);
+			$this->scoreAttribute($idx, 'source',    $track['textSource'], $this->scoreForRealTags);
+			$this->scoreAttribute($idx, 'urlUser',   $track['textUrlUser'], $this->scoreForRealTags);
+			$this->scoreAttribute('album', 'title',  $track['album'], $this->scoreForRealTags);
+			$this->scoreAttribute('album', 'artist', $track['albumArtist'], $this->scoreForRealTags);
+			$this->scoreAttribute('album', 'artist', $track['artist'], $this->scoreForRealTags);
 		}
-		$this->guessAttributesByDirectoryName($t['relativeDirectoryPath']);
+		$this->guessAttributesByDirectoryName($track['relDirPath']);
+
+		$this->scoreLabelByLabelDirectory($track['relDirPath']);
 
 		// TODO: post procession:
 		$this->postProcessRecommendations();
@@ -498,7 +470,8 @@ class AlbumMigrator {
 			'numberSchemes' => 2,
 		);
 
-		$decisionBoundry = 11;
+		#$decisionBoundry = 11;
+		$decisionBoundry = 20;
 
 		foreach(array_keys($scoreTable) as $property) {
 			$bestMatch = uniqueArrayOrderedByRelevance($this->$property);
@@ -532,9 +505,8 @@ class AlbumMigrator {
 		}
 
 		$this->addChronologyScore();
-
 		$this->handleAsAlbumScore /= $trackCount;
-		$this->handleAsAlbum = ($this->handleAsAlbumScore>$decisionBoundry) ? TRUE : FALSE;
+		$this->handleAsAlbum = ($this->handleAsAlbumScore>$decisionBoundry) ? 1 : 0;
 		return;
 	}
 
@@ -548,9 +520,7 @@ class AlbumMigrator {
 		if($value == '') {
 			return 'missing';
 		}
-
 		$rgx = new \Slimpd\RegexHelper();
-
 		$iHateRegex = array(
 			// 01 - Super Tracktitle
 			'prefixed-number' => $rgx->dStart.$rgx->mayBracket.$rgx->num.$rgx->mayBracket.$rgx->glue.$rgx->noMinus.$rgx->dEndInsens,
@@ -568,33 +538,33 @@ class AlbumMigrator {
 			'classic' => $rgx->dStart.$rgx->noMinus.$rgx->dEndInsens,
 		);
 		foreach($iHateRegex as $result => $pattern) {
-			if(preg_match($pattern, $value, $m)) {
+			if(preg_match($pattern, $value, $matches)) {
 				switch($result) {
 					// make recommendations for each track
 					case 'classic':
-						$this->recommend($idx, array($artistOrTitle => $m[1]));
+						$this->recommend($idx, array($artistOrTitle => $matches[1]));
 						break;
 					case 'prefixed-number':
 					case 'prefixed-vinyl':
-						#print_r($m); die($result);
+						#print_r($matches); die($result);
 						$this->recommend($idx, array(
-							'number' => $m[2],
-							$artistOrTitle => $m[4]
+							'trackNumber' => $matches[2],
+							$artistOrTitle => $matches[4]
 						));
-						#$this->scoreAttribute($idx, $artistOrTitle, $value, ($this->defaultScoreForRealTagAttrs*(-1)));
+						#$this->scoreAttribute($idx, $artistOrTitle, $value, ($this->scoreForRealTags*(-1)));
 						break;
 					case 'artist-title':
 						$this->recommend($idx, array(
-							'artist' => $m[1],
-							'title' => $m[2]
+							'artist' => $matches[1],
+							'title' => $matches[2]
 						));
 						break;
 					case 'prefixed-number-artist-title':
 					case 'prefixed-vinyl-artist-title':
 						$this->recommend($idx, array(
-							'number' => $m[1],
-							'artist' => $m[2],
-							'title' => $m[3]
+							'trackNumber' => $matches[1],
+							'artist' => $matches[2],
+							'title' => $matches[3]
 						));
 						break;
 				}
@@ -636,55 +606,90 @@ class AlbumMigrator {
 		foreach($iHateRegex as $result => $pattern) {
 			#cliLog($pattern);
 			#cliLog($value);
-			if(preg_match($pattern, $value, $m)) {
+			if(preg_match($pattern, $value, $matches)) {
 				switch($result) {
 					case 'artist-title-year':
-						#print_r($m); die($result);
+						#print_r($matches); die($result);
 						$this->recommend('album', array(
-							'artist' => remU($m[1]),
-							'title' => remU($m[2]),
-							'year' => remU($m[3]),
+							'artist' => remU($matches[1]),
+							'title' => remU($matches[2]),
+							'year' => remU($matches[3]),
 						));
 						break;
 					case 'artist-title':
-						#print_r($m); die($result);
+						#print_r($matches); die($result);
 						$this->recommend('album', array(
-							'artist' => remU($m[1]),
-							'title' => remU($m[2])
+							'artist' => remU($matches[1]),
+							'title' => remU($matches[2])
 						));
 						break;
 				}
 				if(stripos($result, 'vinyl') !== FALSE) {
-					$this->recommend($idx, array('source' => 'Vinyl'));
+					$this->recommend('album', array('source' => 'Vinyl'));
+					foreach(array_keys($this->tracks) as $idx) {
+						$this->recommend($idx, array('source' => 'Vinyl'));
+					}
 				}
 			}
 		}
 
 		$this->recommend('album', array('title' => remU($value)));
 
-		if(preg_match_all("/".$rgx->mayBracket.$rgx->year.$rgx->mayBracket."/", $value, $m)) {
-			foreach($m as $i) {
-				foreach($i as $x) {
-					$this->scoreAttribute('album', 'year', $x);
-					$this->scoreAllTracksWithAttribute('year', $x);
+		if(preg_match_all("/".$rgx->mayBracket.$rgx->year.$rgx->mayBracket."/", $value, $matches)) {
+			foreach($matches as $matches2) {
+				foreach($matches2 as $match) {
+					$this->scoreAttribute('album', 'year', $match);
+					$this->scoreAllTracksWithAttribute('year', $match);
 				}
 			}
 		}
-		if(preg_match_all("/".$rgx->catNr."/", $value, $m)) {
-			foreach($m as $i) {
-				foreach($i as $x) {
-					$this->scoreAttribute('album', 'catalogNr', $x);
-					$this->scoreAllTracksWithAttribute('catalogNr', $x);
+		if(preg_match_all("/".$rgx->catNr."/", $value, $matches)) {
+			foreach($matches as $matches2) {
+				foreach($matches2 as $match) {
+					$this->scoreAttribute('album', 'catalogNr', $match);
+					$this->scoreAllTracksWithAttribute('catalogNr', $match);
 				}
 			}
 		}
 		// for my personal collection - pretty sure this is not very common
-		if(preg_match("/^([a-z0-9_]{1,15})\-\-/", $value, $m)) {
-			$this->scoreAttribute('album', 'catalogNr', $m[1], 2);
-			$this->scoreAllTracksWithAttribute('catalogNr', $m[1], 2);
+		if(preg_match("/^([a-z0-9_]{1,15})\-\-/", $value, $matches)) {
+			$this->scoreAttribute('album', 'catalogNr', $matches[1], 2);
+			$this->scoreAllTracksWithAttribute('catalogNr', $matches[1], 2);
 		}
 	}
 
+	private function scoreLabelByLabelDirectory($albumPath) {
+		cliLog("--- add LABEL based on directory ---", 8);
+		cliLog("  album directory: " . $albumPath, 8);
+		$app = \Slim\Slim::getInstance();
+
+		// check config
+		if(isset($app->config['label-parent-directories']) === FALSE) {
+			cliLog("  aborting because no label directories configured",8);
+			return;
+		}
+
+		foreach($app->config['label-parent-directories'] as $labelDir) {
+			$labelDir = rtrim($labelDir, DS) . DS; // append trailingSlash
+			cliLog("  configured label dir: " . $labelDir, 10);
+			if(stripos($albumPath, $labelDir) !== 0) {
+				cliLog("  no match: " . $labelDir, 8);
+				continue;
+			}
+			// use directory name as label name
+			$newLabelString = basename(dirname($albumPath));
+
+			// do some cleanup
+			$newLabelString = ucwords(remU($newLabelString));
+			cliLog("  match: " . $newLabelString, 8);
+			$this->scoreAttribute('album', 'label', $newLabelString, 5);
+			foreach(array_keys($this->tracks) as $idx) {
+				$this->scoreAttribute($idx, 'label', $newLabelString, 5);
+			}
+			return;
+		}
+		return;
+	}
 
 	private function recommend($idx, $attrArray, $score = 1) {
 		$rgx = new \Slimpd\RegexHelper();
@@ -703,9 +708,9 @@ class AlbumMigrator {
 		if(isset($attrArray['title']) === TRUE && isset($this->r[$idx]['artist']['Various Artists']) == TRUE) {
 			#die('sg');
 			foreach(range(5,1) as $len) {
-				if(preg_match("/^".$rgx->anything."([ .\/\-_]{".$len."})".$rgx->anything."$/", $attrArray['title'],$m)) {
-					$this->scoreAttribute($idx, 'artist', $m[1], 3);
-					$this->scoreAttribute($idx, 'title', $m[3], 3);
+				if(preg_match("/^".$rgx->anything."([ .\/\-_]{".$len."})".$rgx->anything."$/", $attrArray['title'],$matches)) {
+					$this->scoreAttribute($idx, 'artist', $matches[1], 3);
+					$this->scoreAttribute($idx, 'title', $matches[3], 3);
 					break;
 				}
 			}
@@ -714,9 +719,9 @@ class AlbumMigrator {
 		
 		// remove various artists in case we find it in albumtitle
 		if($idx == 'album' && isset($attrArray['title'])) {
-			if(preg_match("/".$rgx->va.$rgx->glue. $rgx->anything.$rgx->dEndInsens, $attrArray['title'], $m)) {
-				#print_r($m);
-				$this->scoreAttribute('album', 'title', $m[2], 3);
+			if(preg_match("/".$rgx->various.$rgx->glue. $rgx->anything.$rgx->dEndInsens, $attrArray['title'], $matches)) {
+				#print_r($matches);
+				$this->scoreAttribute('album', 'title', $matches[2], 3);
 				$this->scoreAttribute('album', 'title', $attrArray['title'], -2);
 			}
 		}
@@ -733,38 +738,38 @@ class AlbumMigrator {
 			}
 			#cliLog($attrArray[$prop]);
 			#cliLog($rgx->dStart.$rgx->num.$rgx->glue.$rgx->noMinus.$rgx->glue.$rgx->noMinus.$rgx->dEndInsens);
-			if(preg_match($rgx->dStart.$rgx->num.$rgx->glue.$rgx->noMinus.$rgx->glue.$rgx->noMinus.$rgx->dEndInsens, $attrArray[$prop], $m)) {
-				$this->scoreAttribute($idx, 'number', $m[1], 3);
-				$this->scoreAttribute($idx, 'artist', $m[2], 3);
-				$this->scoreAttribute($idx, 'title', $m[3], 3);
+			if(preg_match($rgx->dStart.$rgx->num.$rgx->glue.$rgx->noMinus.$rgx->glue.$rgx->noMinus.$rgx->dEndInsens, $attrArray[$prop], $matches)) {
+				$this->scoreAttribute($idx, 'trackNumber', $matches[1], 3);
+				$this->scoreAttribute($idx, 'artist', $matches[2], 3);
+				$this->scoreAttribute($idx, 'title', $matches[3], 3);
 				$this->scoreAttribute($idx, $prop, $attrArray[$prop], -2);
 			}
-			if(preg_match($rgx->dStart.$rgx->vinyl.$rgx->glue.$rgx->noMinus.$rgx->glue.$rgx->noMinus.$rgx->dEndInsens, $attrArray[$prop], $m)) {
-				$this->scoreAttribute($idx, 'number', $m[1], 3);
-				$this->scoreAttribute($idx, 'artist', $m[2], 3);
-				$this->scoreAttribute($idx, 'title', $m[3], 3);
+			if(preg_match($rgx->dStart.$rgx->vinyl.$rgx->glue.$rgx->noMinus.$rgx->glue.$rgx->noMinus.$rgx->dEndInsens, $attrArray[$prop], $matches)) {
+				$this->scoreAttribute($idx, 'trackNumber', $matches[1], 3);
+				$this->scoreAttribute($idx, 'artist', $matches[2], 3);
+				$this->scoreAttribute($idx, 'title', $matches[3], 3);
 				$this->scoreAttribute('album', 'source', 'Vinyl', 3);
 				$this->scoreAttribute($idx, $prop, $attrArray[$prop], -2);
 			}
 
 			// Ahmad Jamal with Voices-1967-Cry Young-04-Who Needs Manhattan
-			if(preg_match($rgx->dStart.$rgx->noMinus.$rgx->glue.$rgx->year.$rgx->glue.$rgx->noMinus.$rgx->glue.$rgx->num.$rgx->glue.$rgx->noMinus.$rgx->dEndInsens, $attrArray[$prop], $m)) {
-				#print_r($m); die();
-				$this->scoreAttribute($idx, 'artist', $m[1], 3);
-				$this->scoreAttribute($idx, 'year', $m[2], 3);
-				$this->scoreAttribute('album', 'year', $m[2], 3);
-				$this->scoreAttribute('album', 'title', $m[3], 3);
-				$this->scoreAttribute($idx, 'number', $m[4], 3);
-				$this->scoreAttribute($idx, 'title', $m[5], 3);
+			if(preg_match($rgx->dStart.$rgx->noMinus.$rgx->glue.$rgx->year.$rgx->glue.$rgx->noMinus.$rgx->glue.$rgx->num.$rgx->glue.$rgx->noMinus.$rgx->dEndInsens, $attrArray[$prop], $matches)) {
+				#print_r($matches); die();
+				$this->scoreAttribute($idx, 'artist', $matches[1], 3);
+				$this->scoreAttribute($idx, 'year', $matches[2], 3);
+				$this->scoreAttribute('album', 'year', $matches[2], 3);
+				$this->scoreAttribute('album', 'title', $matches[3], 3);
+				$this->scoreAttribute($idx, 'trackNumber', $matches[4], 3);
+				$this->scoreAttribute($idx, 'title', $matches[5], 3);
 				$this->scoreAttribute($idx, $prop, $attrArray[$prop], -3);
 			}
 
 			// Little Legends, The - Swamp Walk
 			// deactivated because this fucks up tons auf featured artists
-			#if(preg_match($rgx->dStart.$rgx->noMinus.$rgx->glueNoWhitespace.$rgx->noMinus.$rgx->dEndInsens, $attrArray[$prop], $m)) {
-			#	#print_r($m); die();
-			#	#$this->scoreAttribute($idx, 'artist', $m[1], 3);
-			#	#$this->scoreAttribute($idx, 'title', $m[2], 3);
+			#if(preg_match($rgx->dStart.$rgx->noMinus.$rgx->glueNoWhitespace.$rgx->noMinus.$rgx->dEndInsens, $attrArray[$prop], $matches)) {
+			#	#print_r($matches); die();
+			#	#$this->scoreAttribute($idx, 'artist', $matches[1], 3);
+			#	#$this->scoreAttribute($idx, 'title', $matches[2], 3);
 			#}
 		}
 
@@ -790,8 +795,6 @@ class AlbumMigrator {
 		}
 	}
 
-
-
 	private function scoreAttribute($idx, $attrName, $attrValue, $score = 1) {
 		#cliLog($idx, 10, 'purple');
 		#cliLog($attrName, 10, 'purple');
@@ -802,7 +805,6 @@ class AlbumMigrator {
 
 		$rgx = new \Slimpd\RegexHelper();
 
-		
 		switch($attrName) {
 			case 'year':
 				if($rgx->seemsYeary($attrValue) === FALSE) {
@@ -829,12 +831,12 @@ class AlbumMigrator {
 					if(isset($this->r[$idx][$attrName][$attrValue]) === FALSE) {
 						$this->r[$idx][$attrName][$attrValue] = 0;
 					}
-					$this->r[$idx][$attrName][$attrValue] -= $this->defaultScoreForRealTagAttrs;
+					$this->r[$idx][$attrName][$attrValue] -= $this->scoreForRealTags;
 					#print_r($this->r[$idx][$attrName][$attrValue]); die();
 					return;
 				}
 				break;
-			case 'number':
+			case 'trackNumber':
 				$attrValue = ltrim($attrValue, '0');
 				// in case we have letters make sure no combinations of different letters get scored (like 'if', 'be', ...)
 				if(is_numeric($attrValue) === FALSE) {
@@ -850,14 +852,11 @@ class AlbumMigrator {
 			return;
 		}
 
-		
-
 		if(isset($this->r[$idx][$attrName][$attrValue]) === FALSE) {
 			$this->r[$idx][$attrName][$attrValue] = 0;
 		}
 		$this->r[$idx][$attrName][$attrValue] += $score;
 	}
-
 
 	private function getAlbumScheme($value, $idx) {
 		if($value == '') {
@@ -916,66 +915,66 @@ class AlbumMigrator {
 			'album-source' => $rgx->dStart.$rgx->anything.$rgx->glue.$rgx->source.$rgx->dEndInsens,
 		);
 		foreach($iHateRegex as $result => $pattern) {
-			if(preg_match($pattern, $value, $m)) {
+			if(preg_match($pattern, $value, $matches)) {
 				switch($result) {
 					// make recommendations for each track
 					case 'catalog':
-						#print_r($m); die($result);
+						#print_r($matches); die($result);
 						$this->recommend('album',array('catalogNr' => remU($value)));
 						$this->recommend($idx,array('catalogNr' => remU($value)));
 						break;
 					case 'catalog-source':
-						#print_r($m); die($result);
+						#print_r($matches); die($result);
 						$this->recommend('album',
 							array(
-								'catalogNr' => remU($m[3]),
-								'source' => remU($m[7])
+								'catalogNr' => remU($matches[3]),
+								'source' => remU($matches[7])
 						));
 						$this->recommend($idx,
 							array(
-								'catalogNr' => remU($m[3]),
-								'source' => remU($m[7])
+								'catalogNr' => remU($matches[3]),
+								'source' => remU($matches[7])
 						));
 						break;
 					case 'album-catalog-source':
-						#print_r($m); die($result);
+						#print_r($matches); die($result);
 						$this->recommend('album',
 							array(
-								'title' => remU($m[1]),
-								'catalogNr' => remU($m[4]),
-								'source' => remU($m[8])
+								'title' => remU($matches[1]),
+								'catalogNr' => remU($matches[4]),
+								'source' => remU($matches[8])
 						));
 						$this->recommend($idx,
 							array(
-								'album' => remU($m[1]),
-								'catalogNr' => remU($m[4]),
-								'source' => remU($m[8])
+								'album' => remU($matches[1]),
+								'catalogNr' => remU($matches[4]),
+								'source' => remU($matches[8])
 						));
 						break;
 					case 'album-catalog':
-						#print_r($m); die($result);
+						#print_r($matches); die($result);
 						$this->recommend('album',
 							array(
-								'title' => remU($m[1]),
-								'catalogNr' => remU($m[4])
+								'title' => remU($matches[1]),
+								'catalogNr' => remU($matches[4])
 						));
 						$this->recommend($idx,
 							array(
-								'album' => remU($m[1]),
-								'catalogNr' => remU($m[4])
+								'album' => remU($matches[1]),
+								'catalogNr' => remU($matches[4])
 						));
 						break;
 					case 'album-source':
-						#print_r($m); die($result);
+						#print_r($matches); die($result);
 						$this->recommend('album',
 							array(
-								'title' => remU($m[1]),
-								'source' => remU($m[4])
+								'title' => remU($matches[1]),
+								'source' => remU($matches[4])
 						));
 						$this->recommend($idx,
 							array(
-								'album' => remU($m[1]),
-								'source' => remU($m[4])
+								'album' => remU($matches[1]),
+								'source' => remU($matches[4])
 						));
 						break;
 				}
@@ -1001,23 +1000,21 @@ class AlbumMigrator {
 		$rgx = new \Slimpd\RegexHelper();
 
 		// maybe we have a year in filename -> add little score
-		if(preg_match_all("/".$rgx->mayBracket.$rgx->year.$rgx->mayBracket."/", $value, $m)) {
-			foreach($m as $i) {
+		if(preg_match_all("/".$rgx->mayBracket.$rgx->year.$rgx->mayBracket."/", $value, $matches)) {
+			foreach($matches as $i) {
 				foreach($i as $x) {
 					$this->scoreAttribute($idx, 'year', $x, 0.5);
 				}
 			}
 		}
 		// maybe we have a catNr in filename  -> add little score
-		if(preg_match_all("/".$rgx->catNr."/", $value, $m)) {
-			foreach($m as $i) {
+		if(preg_match_all("/".$rgx->catNr."/", $value, $matches)) {
+			foreach($matches as $i) {
 				foreach($i as $x) {
 					$this->scoreAttribute($idx, 'catalogNr', $x, 0.5);
 				}
 			}
 		}
-
-
 		
 		$iHateRegex = array(
 			// 01-Aaron_Dilloway-Untitled.mp3
@@ -1051,13 +1048,13 @@ class AlbumMigrator {
 		);
 		foreach($iHateRegex as $result => $pattern) {
 			#cliLog($pattern);
-			if(preg_match($pattern, $value, $m)) {
+			if(preg_match($pattern, $value, $matches)) {
 				if($result !== 'nonumber' && $result !== 'nonumber-noartist') {
-					if(is_numeric($m[1])) {
-						$this->extractedTrackNumbers[$idx] = intval($m[1]);
+					if(is_numeric($matches[1])) {
+						$this->extractedTrackNumbers[$idx] = intval($matches[1]);
 					} else {
 						// vinyl schemed tracknumer
-						$this->extractedTrackNumbers[$idx] = strtoupper($m[1]);
+						$this->extractedTrackNumbers[$idx] = strtoupper($matches[1]);
 					}
 				}
 
@@ -1068,39 +1065,39 @@ class AlbumMigrator {
 					case 'classic-vinyl':
 					case 'classicscene-vinyl':
 						$this->recommend($idx, array(
-							'number' => remU($m[1]),
-							'artist' => remU($m[2]),
-							'title' => remU($m[3])
+							'trackNumber' => remU($matches[1]),
+							'artist' => remU($matches[2]),
+							'title' => remU($matches[3])
 						));
 						break;
 					case 'noartist':
 					case 'noartist-vinyl':
 						$this->recommend($idx, array(
-							'number' => remU($m[1]),
-							'title' => remU($m[2])
+							'trackNumber' => remU($matches[1]),
+							'title' => remU($matches[2])
 						));
 						break;
 					case 'nonumber':
 						$this->recommend($idx, array(
-							'artist' => remU($m[1]),
-							'title' => remU($m[2])
+							'artist' => remU($matches[1]),
+							'title' => remU($matches[2])
 						));
 						break;
 					case 'album-number-artist-title':
 					case 'album-vinyl-artist-title':
 						$this->recommend($idx, array(
-							'album' => remU($m[1]),
-							'number' => remU($m[2]),
-							'artist' => remU($m[3]),
-							'title' => remU($m[4])
+							'album' => remU($matches[1]),
+							'trackNumber' => remU($matches[2]),
+							'artist' => remU($matches[3]),
+							'title' => remU($matches[4])
 						));
 						$this->recommend('album', array(
-							'title' => remU($m[1])
+							'title' => remU($matches[1])
 						));
 					case 'nonumber-noartist':
 					case 'anything':
 						$this->recommend($idx, array(
-							'title' => remU($m[1])
+							'title' => remU($matches[1])
 						));
 						break;
 				}
@@ -1135,26 +1132,26 @@ class AlbumMigrator {
 		}
 		if(intval($value) == strval($value) && is_numeric($value) === TRUE) {
 			$this->extractedTrackNumbers[$idx] = $value;
-			$this->recommend($idx, array('number' => $value));
+			$this->recommend($idx, array('trackNumber' => $value));
 			return 'simple'; // 1, 2, 3
 		}
 
 		if(ltrim($value,'0') != strval($value)) {
 			$this->extractedTrackNumbers[$idx] = intval($value);
-			$this->recommend($idx, array('number' => intval($value)));
+			$this->recommend($idx, array('trackNumber' => intval($value)));
 			return 'leadingzero';	// 01, 02
 		}
-		if(preg_match("/^(\d*)\/(\d*)$/", $value, $m)) {
-			$this->extractedTrackNumbers[$idx] = intval($m[1]);
-			$this->extractedTotalTracks[$idx] = intval($m[2]);
-			$this->recommend($idx, array('number' => intval($m[1])));
-			$this->recommend('album', array('totalTracks' => intval($m[2])));
+		if(preg_match("/^(\d*)\/(\d*)$/", $value, $matches)) {
+			$this->extractedTrackNumbers[$idx] = intval($matches[1]);
+			$this->extractedTotalTracks[$idx] = intval($matches[2]);
+			$this->recommend($idx, array('trackNumber' => intval($matches[1])));
+			$this->recommend('album', array('totalTracks' => intval($matches[2])));
 			return 'slashsplit'; // 01/12 , 2/12
 		}
 		if(preg_match("/^([a-zA-Z]{1,2})(?:[\/-]{1})(\d*)$/", $value)) {
 			if($idx !== NULL) { 
 				$this->extractedTrackNumbers[$idx] = $value;
-				$this->recommend($idx, array('number' => $value, 'source' => 'Vinyl'));
+				$this->recommend($idx, array('trackNumber' => $value, 'source' => 'Vinyl'));
 				$this->recommend('album', array('source' => 'Vinyl'));
 			}
 			return 'vinyl';	// AA1, B2, C34, A-1, A/4
@@ -1162,7 +1159,6 @@ class AlbumMigrator {
 		cliLog(__FUNCTION__ ."(" . $value . ") unknown",6 , 'red');
 		return 'unknown';
 	}
-
 	
 	/**
 	 * in case we find ranges without gaps add aditional score
@@ -1207,7 +1203,7 @@ class AlbumMigrator {
 		// 101 - 1XX, 201 - 20X
 		$discRange = TRUE;
 		foreach($rangeNess as $range) {
-			if(preg_match("/^(\d{1})01-/", $range, $m) === 0) {
+			if(preg_match("/^(\d{1})01-/", $range) === 0) {
 				$discRange = FALSE;
 			}
 		}
@@ -1215,18 +1211,26 @@ class AlbumMigrator {
 			$this->handleAsAlbumScore += 5*count($this->extractedTrackNumbers);
 			return;
 		}
-
 		return;
 	}
 
 	
-
-	
 	/**
-	 * TODO: remove this strange syntax "goto" of copy/pasted method
+	 * checks if passed number array is gapless
 	 * 
 	 */
-	private function extractNumericRangeness($input) {
+	private function extractNumericRangeness($numbers) {
+		$noGaps = range(1,max($numbers));
+		return array_diff($noGaps,$numbers);
+	}
+	
+	/**
+	 * 
+	 * TODO: maybe this function is useful to identify missing tracks of an album!?
+	 * (TODO): remove this strange syntax "goto" of copy/pasted method
+	 */
+	/*
+	private function extractNumericRangenessOld($input) {
 
 		//last value is dropped so add something useless to be dropped
 		array_push($input, null);
@@ -1258,15 +1262,16 @@ class AlbumMigrator {
 
 		return $rangeArray;
 	}
+	*/
 
 	
 	// setter
-	public function setRelativeDirectoryPathHash($value) {
-		$this->relativeDirectoryPathHash = $value;
+	public function setRelDirPathHash($value) {
+		$this->relDirPathHash = $value;
 	}
 
-	public function setRelativeDirectoryPath($value) {
-		$this->relativeDirectoryPath = $value;
+	public function setRelDirPath($value) {
+		$this->relDirPath = $value;
 	}
 
 	public function setDirectoryMtime($value) {
@@ -1279,12 +1284,12 @@ class AlbumMigrator {
 	}
 
 	// getter
-	public function getRelativeDirectoryPathHash() {
-		return $this->relativeDirectoryPathHash;
+	public function getRelDirPathHash() {
+		return $this->relDirPathHash;
 	}
 
-	public function getRelativeDirectoryPath() {
-		return $this->relativeDirectoryPath;
+	public function getRelDirPath() {
+		return $this->relDirPath;
 	}
 
 	public function getDirectoryMtime() {

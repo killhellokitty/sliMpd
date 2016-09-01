@@ -1,5 +1,7 @@
 
-
+.btn-default {
+	transition: all .25s ease-out;
+}
 
 
 .btn-default {
@@ -55,3 +57,5 @@
 	display:inline-block;
 	opacity: 0.2;
 }
+
+button:focus { outline:0 !important; }

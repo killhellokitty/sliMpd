@@ -3,7 +3,6 @@ namespace Slimpd\Models;
 
 class Discogsitem extends \Slimpd\Models\AbstractModel
 {
-	protected $id;
 	protected $tstamp;
 	protected $type;
 	protected $extid;
@@ -131,7 +130,7 @@ class Discogsitem extends \Slimpd\Models\AbstractModel
 				$rawItem->getArtist(),
 				$rawItem->getTitle(),
 				$rawItem->getTrackNumber(),
-				basename($rawItem->getRelativePath())
+				basename($rawItem->getRelPath())
 			];
 			$counter = 0;
 			foreach($data['tracklist'] as $t) {
@@ -161,12 +160,11 @@ class Discogsitem extends \Slimpd\Models\AbstractModel
 				// in case we have a discogs duration compare durations
 				if(strlen($t['duration']) > 0) {
 					$extSeconds = timeStringToSeconds($t['duration']);
+					$higher = $extSeconds;
+					$lower =  $rawItem->getMiliseconds();
 					if($rawItem->getMiliseconds() > $extSeconds) {
 						$higher = $rawItem->getMiliseconds();
 						$lower =  $extSeconds;
-					} else {
-						$higher = $extSeconds;
-						$lower =  $rawItem->getMiliseconds();
 					}
 					$matchScore[$rawItem->getId()][$extIndex] += floor($lower/($higher/100));
 				}
@@ -193,9 +191,6 @@ class Discogsitem extends \Slimpd\Models\AbstractModel
 
 	
 	//setter
-	public function setId($value) {
-		$this->id = $value;
-	}
 	public function setTstamp($value) {
 		$this->tstamp = $value;
 	}
@@ -211,9 +206,6 @@ class Discogsitem extends \Slimpd\Models\AbstractModel
 	
 	
 	// getter
-	public function getId() {
-		return $this->id;
-	}
 	public function getTstamp() {
 		return $this->tstamp;
 	}

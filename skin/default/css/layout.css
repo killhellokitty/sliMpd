@@ -6,11 +6,23 @@ body {
 	color: #EEE;
 }
 
+.overlay-backdrop {
+	position: fixed;
+	top:0;
+	bottom:0;
+	left:0;
+	right:0;
+	background: rgba(0,0,0,0.5);
+	opacity: 0;
+	z-index: 1040;
+	display: none;
+}
+
 .bg-col1,
 .popover,
 .popover .popover-title {
 	background-color: #1A1A1A;
-	
+
 }
 .bg-col2 {
 	background-color: #252525;
@@ -32,9 +44,9 @@ body {
 	color: #EEE;
 }
 
-.col2 {
-	/* @see: templates/css/spotcolors.css for overrides */
-}
+/* @see: templates/css/spotcolors.css for overrides
+.col2 { }
+*/
 
 .col3 {
 	color: #CCC;
@@ -66,6 +78,7 @@ h2 {
 
 a {
 	color: #EEE;
+	transition: all .25s ease-out;
 }
 
 .artist-link {
@@ -84,9 +97,11 @@ a {
 .dark,
 .darker-links a {
 	color: #696969;
+	transition: all .25s ease-out;
 }
 .fa {
 	color: #888;
+	transition: all .25s ease-out;
 }
 
 .uc {
@@ -105,7 +120,7 @@ a {
 
 .centered-text {
     text-align: center;
-} 
+}
 
 
 .disabled .fa {
@@ -172,10 +187,6 @@ a .article {
 
 .no-padding-right {
 	padding-right: 0;
-}
-
-.item-row {
-
 }
 
 .centered-icon {
@@ -329,7 +340,6 @@ body.standalone {
 .waveform.waveform-tiny {
 	width: 62px;
     height: 38px;
-    display: inline;
     position: absolute;
     right: 200px;
 }
@@ -371,4 +381,20 @@ body.standalone {
 	.btn {
 		padding: 3px 6px;
 	}
+}
+
+
+.carousel-thumb {
+	display: block;
+	float: left;
+	width: 49px;
+	height: 49px;
+	margin: 0 3px 3px 0;
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: contain;
+}
+
+.carousel-booklet {
+	text-align: center;
 }

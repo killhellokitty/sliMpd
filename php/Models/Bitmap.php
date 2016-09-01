@@ -1,16 +1,12 @@
 <?php
 namespace Slimpd\Models;
 
-class Bitmap extends \Slimpd\Models\AbstractModel
+class Bitmap extends \Slimpd\Models\AbstractFilesystemItem
 {
-	protected $id;
-	protected $relativePath;
-	protected $relativePathHash;
-	protected $filemtime;
-	protected $filesize;
 	protected $mimeType;
 	protected $width;
 	protected $height;
+	protected $bghex;
 	
 	protected $albumId;
 	protected $trackId;
@@ -30,7 +26,7 @@ class Bitmap extends \Slimpd\Models\AbstractModel
 			: $app->config['mpd']['musicdir'];
 			
 		$phpThumb = self::getPhpThumb();	
-		$phpThumb->setSourceFilename($imgDirecoryPrefix . $this->getRelativePath());
+		$phpThumb->setSourceFilename($imgDirecoryPrefix . $this->getRelPath());
 		$phpThumb->setParameter('config_output_format', 'jpg');
 		
 		switch($preConf) {
@@ -79,19 +75,19 @@ class Bitmap extends \Slimpd\Models\AbstractModel
 		} else {
 			// check if we have a record with this path
 			$searchParams = array(
-				'relativePath' => $this->getRelativePath()
+				'relPath' => $this->getRelPath()
 			);
 			
 			// multiple usage of same image files are possible...
 			if($this->getAlbumId() > 0) {
 				$searchParams['albumId'] = $this->getAlbumId();
 			}			
-			$b2 = Bitmap::getInstanceByAttributes($searchParams);
+			$bitmap2 = Bitmap::getInstanceByAttributes($searchParams);
 
-			if($b2 === NULL) {
+			if($bitmap2 === NULL) {
 				return $this->insert();
 			}
-			$this->setId($b2->getId());
+			$this->setId($bitmap2->getId());
 		}
 			
 		$app = \Slim\Slim::getInstance();
@@ -115,11 +111,11 @@ class Bitmap extends \Slimpd\Models\AbstractModel
 			return FALSE;
 		}
 		
-		if(!$this->getRelativePath()) {
+		if(!$this->getRelPath()) {
 			// invalid instance 
 			return FALSE;
 		}
-		$bitmapPath = APP_ROOT . $this->getRelativePath(); 
+		$bitmapPath = APP_ROOT . $this->getRelPath(); 
 		if(is_file($bitmapPath) === TRUE && is_writeable($bitmapPath) === TRUE) {
 			unlink($bitmapPath);
 		}
@@ -143,21 +139,6 @@ class Bitmap extends \Slimpd\Models\AbstractModel
 
 		
 	//setter
-	public function setId($value) {
-		$this->id = $value;
-	}
-	public function setRelativePath($value) {
-		$this->relativePath = $value;
-	}
-	public function setRelativePathHash($value) {
-		$this->relativePathHash = $value;
-	}
-	public function setFilemtime($value) {
-		$this->filemtime = $value;
-	}
-	public function setFilesize($value) {
-		$this->filesize = $value;
-	}
 	public function setMimeType($value) {
 		$this->mimeType = $value;
 	}
@@ -166,6 +147,9 @@ class Bitmap extends \Slimpd\Models\AbstractModel
 	}
 	public function setHeight($value) {
 		$this->height = $value;
+	}
+	public function setBghex($value) {
+		$this->bghex = $value;
 	}
 	public function setAlbumId($value) {
 		$this->albumId = $value;
@@ -197,21 +181,6 @@ class Bitmap extends \Slimpd\Models\AbstractModel
 	
 	
 	// getter
-	public function getId() {
-		return $this->id;
-	}
-	public function getRelativePath() {
-		return $this->relativePath;
-	}
-	public function getRelativePathHash() {
-		return $this->relativePathHash;
-	}
-	public function getFilemtime() {
-		return $this->filemtime;
-	}
-	public function getFilesize() {
-		return $this->filesize;
-	}
 	public function getMimeType() {
 		return $this->mimeType;
 	}
@@ -220,6 +189,9 @@ class Bitmap extends \Slimpd\Models\AbstractModel
 	}
 	public function getHeight() {
 		return $this->height;
+	}
+	public function getBghex() {
+		return $this->bghex;
 	}
 	public function getAlbumId() {
 		return $this->albumId;

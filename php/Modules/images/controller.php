@@ -1,6 +1,6 @@
 <?php
 $weightConf = trimExplode("\n", $app->config['images']['weightening'], TRUE);
-$imageWeightOrderBy = "FIELD(pictureType, '" . join("','", $weightConf) . "'), filesize DESC";
+$imageWeightOrderBy = "FIELD(pictureType, '" . join("','", $weightConf) . "'), sorting ASC, filesize DESC";
 
 #echo $imageWeightOrderBy; die();
 // predefined album-image sizes
@@ -45,13 +45,13 @@ foreach (array(35, 50,100,300,1000) as $imagesize) {
 	$app->get('/image-'.$imagesize.'/path/:itemParams+', function($itemParams) use ($app, $vars, $imagesize){
 		$image = new \Slimpd\Models\Bitmap();
 		
-		$image->setRelativePath(join(DS, $itemParams));
+		$image->setRelPath(join(DS, $itemParams));
 		$image->dump($imagesize, $app);
 	})->name('imagepath-' .$imagesize);
 	
 	$app->get('/image-'.$imagesize.'/searchfor/:itemParams+', function($itemParams) use ($app, $vars, $imagesize){
-		$importer = new Slimpd\importer();
-		$images = $importer->getFilesystemImagesForMusicFile(join(DS, $itemParams));
+		$filesystemReader = new \Slimpd\Modules\importer\FilesystemReader();
+		$images = $filesystemReader->getFilesystemImagesForMusicFile(join(DS, $itemParams));
 		
 		if(count($images) === 0) {
 			$app->response->redirect($app->urlFor('imagefallback-'.$imagesize, ['type' => 'track']));
