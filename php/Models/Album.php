@@ -1,20 +1,16 @@
 <?php
 namespace Slimpd\Models;
 
-class Album extends \Slimpd\Models\AbstractModel
+class Album extends \Slimpd\Models\AbstractFilesystemItem
 {
-	protected $id;
 	protected $artistId;
 	protected $title;
-	protected $relativePath;
-	protected $relativePathHash;
 	protected $year;
 	protected $month;
 	protected $genreId;
 	protected $labelId;
 	protected $catalogNr;
 	
-	protected $filemtime;
 	protected $added;
 	protected $discs;
 	
@@ -35,13 +31,13 @@ class Album extends \Slimpd\Models\AbstractModel
 	public static $tableName = 'album';
 	
 	
-	public function getAlbumByRelativePath($relativePath) {
+	public function getAlbumByRelPath($relPath) {
 		
 		$app = \Slim\Slim::getInstance();
 		$query = "
 			SELECT * 
 			FROM album
-			WHERE relativePathHash=\"" . getFilePathHash($relativePath) . "\"";
+			WHERE relPathHash=\"" . getFilePathHash($relPath) . "\"";
 		$result = $app->db->query($query);
 		$record = $result->fetch_assoc();
 		if($record === NULL) {
@@ -53,20 +49,11 @@ class Album extends \Slimpd\Models\AbstractModel
 	
 	
 	//setter
-	public function setId($value) {
-		$this->id = $value;
-	}
 	public function setArtistId($value) {
 		$this->artistId = $value;
 	}
 	public function setTitle($value) {
 		$this->title = $value;
-	}
-	public function setRelativePath($value) {
-		$this->relativePath = $value;
-	}
-	public function setRelativePathHash($value) {
-		$this->relativePathHash = $value;
 	}
 	public function setYear($value) {
 		$this->year = $value;
@@ -82,9 +69,6 @@ class Album extends \Slimpd\Models\AbstractModel
 	}
 	public function setCatalogNr($value) {
 		$this->catalogNr = $value;
-	}
-	public function setFilemtime($value) {
-		$this->filemtime = $value;
 	}
 	public function setAdded($value) {
 		$this->added = $value;
@@ -133,20 +117,11 @@ class Album extends \Slimpd\Models\AbstractModel
 	
 	
 	// getter
-	public function getId() {
-		return $this->id;
-	}
 	public function getArtistId() {
 		return $this->artistId;
 	}
 	public function getTitle() {
 		return $this->title;
-	}
-	public function getRelativePath() {
-		return $this->relativePath;
-	}
-	public function getRelativePathHash() {
-		return $this->relativePathHash;
 	}
 	public function getYear() {
 		return $this->year;
@@ -162,9 +137,6 @@ class Album extends \Slimpd\Models\AbstractModel
 	}
 	public function getCatalogNr() {
 		return $this->catalogNr;
-	}
-	public function getFilemtime() {
-		return $this->filemtime;
 	}
 	public function getAdded() {
 		return $this->added;

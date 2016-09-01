@@ -1,7 +1,6 @@
 <?php
 namespace Slimpd\Modules\mpd;
 use Slimpd\Models\Track;
-use Slimpd\playlist;
 class mpd
 {
 	public function getCurrentlyPlayedTrack() {
@@ -142,7 +141,7 @@ class mpd
 			if($instance === NULL) {
 				return FALSE;
 			}
-			return $instance->getRelativePath();
+			return $instance->getRelPath();
 		}
 		if(is_string($item) === TRUE) {
 			return $item;
@@ -225,13 +224,13 @@ class mpd
 				break;
 			case 'injectPlaylist':
 			case 'injectPlaylistAndPlay':
-				$playlist = new \Slimpd\playlist\playlist($itemPath);
+				$playlist = new \Slimpd\Models\PlaylistFilesystem($itemPath);
 				$playlist->fetchTrackRange(0,1000, TRUE);
 				$counter = $this->appendPlaylist($playlist, $targetPosition);
 				if($firePlay === TRUE) {
 					$this->mpd('play ' . intval($targetPosition));
 				}
-				notifyJson("MPD: added " . $playlist->getRelativePath() . " (". $counter ." tracks) to playlist", 'mpd');
+				notifyJson("MPD: added " . $playlist->getRelPath() . " (". $counter ." tracks) to playlist", 'mpd');
 				return;
 			case 'appendTrack':
 			case 'appendTrackAndPlay':
@@ -271,14 +270,14 @@ class mpd
 			case 'replacePlaylist':
 			case 'replacePlaylistAndPlay':
 			case 'softreplacePlaylist':
-				$playlist = new \Slimpd\playlist\playlist($itemPath);
+				$playlist = new \Slimpd\Models\PlaylistFilesystem($itemPath);
 
 				$playlist->fetchTrackRange(0,1000, TRUE);
 				$counter = $this->appendPlaylist($playlist);
 				if($firePlay === TRUE) {
 					$this->mpd('play ' . intval($targetPosition));
 				}
-				notifyJson("MPD: added " . $playlist->getRelativePath() . " (". $counter ." tracks) to playlist", 'mpd');
+				notifyJson("MPD: added " . $playlist->getRelPath() . " (". $counter ." tracks) to playlist", 'mpd');
 				break;
 
 				
@@ -437,7 +436,7 @@ class mpd
 			if($t->getError() === 'notfound') {
 				continue;
 			}
-			$trackPath = "\"" . str_replace("\"", "\\\"", $t->getRelativePath()) . "\""; 
+			$trackPath = "\"" . str_replace("\"", "\\\"", $t->getRelPath()) . "\""; 
 			$cmd = "add " . $trackPath;
 			if($targetPosition !== FALSE) {
 				$cmd = "addid " . $trackPath . " " . ($targetPosition+$counter);

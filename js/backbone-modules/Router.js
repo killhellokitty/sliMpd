@@ -38,7 +38,7 @@
 			 * work against backbone"s default behaviour - begin
 			 *
 			 * force rendering of view - even if we request the same (current) route again
-			 * without pushing this to history 
+			 * without pushing this to history
 			 */
 			var pathStripper = /#.*$/;
 			var Backbone = window.Backbone;
@@ -59,7 +59,7 @@
 				Backbone.history.loadUrl(fragment);
 				return;
 			}
-			/* work against backbone"s default behaviour - end */ 
+			/* work against backbone"s default behaviour - end */
 
 			window.Backbone.Router.prototype.navigate.call(this, fragment, options);
 		},
@@ -74,7 +74,7 @@
 			// first time page loaded markup is delivered by backend, no need for ajax call!
 			if (!this.rendered) {
 				this.currentView = new window.sliMpd.modules.PageView({
-					name : name,
+					name,
 					templateString : "",
 					el : "#main>.main-content"
 				});
@@ -86,29 +86,27 @@
 			// TODO: add proper loading animation
 			this.$body.addClass("is-loading");
 			window.NProgress.start();
-			$("<div class='modal-backdrop fade in' id='loading-backdrop'></div>").appendTo(this.$body);
 			this.ajaxLoading = true;
 			$.ajax({
-				url: window.sliMpd.setGetParameter(url, "nosurrounding", "1")
+				url: window.sliMpd.router.setGetParameter(url, "nosurrounding", "1")
 			}).done(function(response) {
 				if(this.previousView) {
 					this.previousView.remove();
 				}
 				this.currentView = new window.sliMpd.modules.PageView({
-					name : name,
+					name,
 					templateString : response
 				});
 				this.currentView.render(true);
 				this.$content.html(this.currentView.$el);
 				this.$body.removeClass("is-loading");
 				window.NProgress.done();
-				$("#loading-backdrop").remove();
+
 				this.ajaxLoading = false;
 			}.bind(this))
 			.fail(function() {
 				this.$body.removeClass("is-loading");
 				window.NProgress.done();
-				$("#loading-backdrop").remove();
 				this.ajaxLoading = false;
 				window.sliMpd.notifyError(url);
 				return;
@@ -159,6 +157,27 @@
 						.replace(/\?/g, "%3F")
 					: null;
 			});
+		},
+		/**
+		 * adds get-paramter to url, respecting existing and not-existing params
+		 * TODO: currently not compatible with urlstring that contains a #hash
+		 * @param {string} urlstring
+		 * @param {string} paramName
+		 * @param {string} paramValue
+		 */
+		setGetParameter(urlstring, paramName, paramValue) {
+			if (urlstring.indexOf(paramName + "=") >= 0) {
+				var prefix = urlstring.substring(0, urlstring.indexOf(paramName));
+				var suffix = urlstring.substring(urlstring.indexOf(paramName));
+				suffix = suffix.substring(suffix.indexOf("=") + 1);
+				suffix = (suffix.indexOf("&") >= 0) ? suffix.substring(suffix.indexOf("&")) : "";
+				urlstring = prefix + paramName + "=" + paramValue + suffix;
+				return urlstring;
+			}
+			urlstring += (urlstring.indexOf("?") < 0)
+				? "?" + paramName + "=" + paramValue
+				: "&" + paramName + "=" + paramValue;
+			return urlstring;
 		}
 	});
 

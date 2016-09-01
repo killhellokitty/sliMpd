@@ -64,7 +64,7 @@ class Xwax {
 			$this->onBeforeGetStatus();
 			if($this->pollcache !== NULL) {
 				$interval = 2;
-				if(microtime(TRUE) - $this->pollcache->getMicrotstamp() < $interval) {
+				if(getMicrotimeFloat() - $this->pollcache->getMicrotstamp() < $interval) {
 					$useCache = TRUE;
 				}
 			}
@@ -101,7 +101,7 @@ class Xwax {
 	 * check if we have a cached pollresult to avoid xwax-client-penetration caused by multiple web-clients
 	 **/
 	private function onBeforeGetStatus() {
-		$this->pollcache = \Slimpd\pollcache::getInstanceByAttributes(
+		$this->pollcache = \Slimpd\Models\Pollcache::getInstanceByAttributes(
 			array(
 				'type' => $this->type,
 				'deckindex' => $this->deckIndex,
@@ -113,23 +113,23 @@ class Xwax {
 	
 	private function onAfterGetStatus($response) {
 		if($this->pollcache === NULL) {
-			$this->pollcache = new \Slimpd\pollcache();
+			$this->pollcache = new \Slimpd\Models\Pollcache();
 			$this->pollcache->setType($this->type);
 			$this->pollcache->setDeckindex($this->deckIndex);
 			$this->pollcache->setIp($this->ip);
 			$this->pollcache->setPort($this->port);
 		}
 		$this->pollcache->setResponse(serialize($response));
-		$this->pollcache->setMicrotstamp(microtime(TRUE));
+		$this->pollcache->setMicrotstamp(getMicrotimeFloat());
 		$this->pollcache->update();
 	}
 
 	public function getCurrentlyPlayedTrack($deckIndex) {
 		$app = \Slim\Slim::getInstance();
-		$xConf = $app->config['xwax'];
+		#$xConf = $app->config['xwax'];
 		$deckStatus = self::clientResponseToArray($this->cmd('get_status', array($deckIndex+1), $app, TRUE));
 		$deckItem = ($deckStatus['path'] !== NULL)
-			 ? \Slimpd\playlist\playlist::pathStringsToTrackInstancesArray([$deckStatus['path']])[0]
+			 ? \Slimpd\Models\PlaylistFilesystem::pathStringsToTrackInstancesArray([$deckStatus['path']])[0]
 			 : NULL;
 		return $deckItem;
 	}
@@ -139,9 +139,14 @@ class Xwax {
 		$app = \Slim\Slim::getInstance();
 		$xConf = $app->config['xwax'];
 		for($i=0; $i<$xConf['decks']; $i++) {
-			$deckStatus = self::clientResponseToArray($this->cmd('get_status', array($i+1), $app, TRUE));
+			// dont try other decks in case first deck fails
+			$response = $this->cmd('get_status', array($i+1), $app, TRUE);
+			if(count($response) === 0) {
+				return NULL;
+			}
+			$deckStatus = self::clientResponseToArray($response);
 			$deckStatus['item'] = ($deckStatus['path'] !== NULL)
-				? \Slimpd\playlist\playlist::pathStringsToTrackInstancesArray([$deckStatus['path']])[0]->jsonSerialize()
+				? \Slimpd\Models\PlaylistFilesystem::pathStringsToTrackInstancesArray([$deckStatus['path']])[0]->jsonSerialize()
 				: NULL;
 			$return[] = $deckStatus;
 		}
@@ -151,6 +156,9 @@ class Xwax {
 
 	public static function clientResponseToArray($responseArray) {
 		$out = array();
+		if(is_array($responseArray) === FALSE) {
+			return $out;
+		}
 		foreach($responseArray as $line) {
 			$params = trimExplode(":", $line, TRUE, 2);
 			$out[$params[0]] = (isset($params[1]) === FALSE) ? NULL : $params[1];

@@ -9,8 +9,7 @@ class Svggenerator {
 	protected $peakFileResolution = 4000;
 	protected $ext;
 	protected $cmdTempwav = '';
-	
-	
+
 	public function __construct($arg) {
 		$config = \Slim\Slim::getInstance()->config['mpd'];
 		$arg = join(DS, $arg);
@@ -19,10 +18,10 @@ class Svggenerator {
 			$track = \Slimpd\Models\Track::getInstanceByAttributes(array('id' => (int)$arg));
 		}
 		if(is_numeric($arg) === FALSE) {
-			$track = \Slimpd\Models\Track::getInstanceByAttributes(array('relativePathHash' => getFilePathHash($arg)));
+			$track = \Slimpd\Models\Track::getInstanceByAttributes(array('relPathHash' => getFilePathHash($arg)));
 		}
 		if(is_object($track) === TRUE) {
-			$this->absolutePath = $config['musicdir'] . $track->getRelativePath();
+			$this->absolutePath = $config['musicdir'] . $track->getRelPath();
 			$this->fingerprint = $track->getFingerprint();
 			$this->ext = $track->getAudioDataFormat();
 		}
@@ -36,26 +35,26 @@ class Svggenerator {
 			}
 			if(is_file($arg) === TRUE) {
 				$this->absolutePath = $arg;
-				$this->ext = strtolower(pathinfo($arg, PATHINFO_EXTENSION));
+				$this->ext = getFileExt($arg);
 			}
 		}
-		
-		// systemcheck testfiles are not within our music_dirs nsor in our database
+
+		// systemcheck testfiles are not within our music_dirs nor in our database
 		if($this->fingerprint === NULL) {
 			if(strpos(realpath(DS.$arg), APP_ROOT . 'templates/partials/systemcheck/waveforms/testfiles/') === 0) {
 				$this->absolutePath = realpath(DS.$arg);
-				$this->ext = strtolower(pathinfo(DS.$arg, PATHINFO_EXTENSION));
+				$this->ext = getFileExt(DS.$arg);
 			}
 		}
-		
+
 		if(is_file($this->absolutePath) === FALSE) {
 			// TODO: should we serve a default waveform svg?
 			return NULL;
 		}
-		
+
 		if(!preg_match("/^([a-f0-9]){32}$/", $this->fingerprint)) {
 			// extract the fingerprint
-			if($fingerprint = \Slimpd\Modules\Importer::extractAudioFingerprint($this->absolutePath)) {
+			if($fingerprint = \Slimpd\Modules\importer\Filescanner::extractAudioFingerprint($this->absolutePath)) {
 				$this->fingerprint = $fingerprint;
 			} else {
 				# TODO: handle missing fingerprint
@@ -84,56 +83,54 @@ class Svggenerator {
 		header('Status: 503 Service Temporarily Unavailable');
 		return $newResponse;
 	}
-	
+
 	public function findValues($byte1, $byte2) {
 		$byte1 = hexdec(bin2hex($byte1));
 		$byte2 = hexdec(bin2hex($byte2));
 		return ($byte1 + ($byte2*256));
 	}
-	
+
 	public function generateSvg($pixel=300) {
 		if(is_file($this->peakValuesFilePath) === FALSE) {
 			$app = \Slim\Slim::getInstance();
 			$app->response->redirect($app->config['root'] . 'imagefallback-100/broken');
 			return;
 		}
-		
+
 		$peaks = file_get_contents($this->peakValuesFilePath);
 		if($peaks === 'generating') {
 			$this->fireRetryHeaderAndExit();
 		}
-		
+
 		$values = array_map('trim', explode("\n", $peaks));
-		
+
 		$values = $this->limitArray($values, $pixel);
+		$values = $this->beautifyPeaks($values);
 		$amount = count($values);
 		$max = max($values);
-		
+
 		$strokeLine = 2;
 		$strokeBorder = 1;
 		$strokeCounter = 0;
 		$avgPeak = 0;
-		
+
 		$renderValues = array();
+
 		
-		
-		foreach($values as $i => $v) {
+		foreach($values as $idx => $value) {
 			$strokeCounter++;
-			$avgPeak += $v;
-			if($strokeCounter>=($strokeBorder + $strokeLine)){
-				$strokeCounter = 0;
-				$avgPeak = $avgPeak/($strokeBorder + $strokeLine+1);
-			} else {
+			$avgPeak += $value;
+			if($strokeCounter < ($strokeBorder + $strokeLine)){
 				continue;
 			}
+			$strokeCounter = 0;
+			$avgPeak = $avgPeak/($strokeBorder + $strokeLine+1);
+
 			$percent = $avgPeak/($max/100);
-			
-			// increase difference between low peak and high peak
-			$percent = $percent*0.01*$percent;
 			$diffPercent = 100 - $percent;
 
 			$stroke = array(
-				'x' => number_format($i/($amount/100), 5, '.', ''),
+				'x' => number_format($idx/($amount/100), 5, '.', ''),
 				'y1' => number_format($diffPercent/2, 2, '.', ''),
 				'y2' => number_format($diffPercent/2 + $percent, 2, '.', '')
 			);
@@ -143,7 +140,7 @@ class Svggenerator {
 			}
 			$renderValues[] = $stroke;
 		}
-    
+
 		$app = \Slim\Slim::getInstance();
 		switch( $app->request->get('colorFor') ) {
 			case 'mpd':
@@ -173,49 +170,50 @@ class Svggenerator {
 			$app->response->redirect($app->config['root'] . 'imagefallback-100/broken');
 			return;
 		}
-		
+
 		$peaks = file_get_contents($this->peakValuesFilePath);
 		if($peaks === 'generating') {
 			$this->fireRetryHeaderAndExit();
 			return NULL;
 		}
-		
+
 		$values = explode("\n", $peaks);
 		$values = array_map('trim', $values);
+		$values = $this->limitArray($values, $resolution);
+		$values = $this->beautifyPeaks($values);
 
-		deliverJson($this->limitArray($values, $resolution));
+		deliverJson($values);
 	}
-	
+
 	public function setPeakFilePath() {
 		$this->peakValuesFilePath = APP_ROOT . 'peakfiles' .
 			DS . $this->ext .
 			DS . substr($this->fingerprint,0,3) .
 			DS . $this->fingerprint;
 	}
-	
-		
+
 	private function generatePeakFile() {
-		
+
 		\phpthumb_functions::EnsureDirectoryExists(
 			dirname($this->peakValuesFilePath),
 			octdec(\Slim\Slim::getInstance()->config['config']['dirCreateMask'])
 		);
 		file_put_contents($this->peakValuesFilePath, "generating");
-		
+
 		// extract peaks
 		$peakValues = $this->getPeaks();
 		if($peakValues === FALSE) {
 			return FALSE;
 		}
-		
+
 		// shorten values to configured limit
 		$peakValues = $this->limitArray($peakValues, $this->peakFileResolution);
-		
+
 		file_put_contents($this->peakValuesFilePath, join("\n", $peakValues));
 		chmod($this->peakValuesFilePath, octdec(\Slim\Slim::getInstance()->config['config']['fileCreateMask']));
 		return;
 	}
-	
+
 	private function getPeaks() {
 		$tmpFileName = APP_ROOT . 'cache' . DS . $this->ext . '.' . $this->fingerprint;
 		$inFile = escapeshellarg($this->absolutePath);
@@ -247,7 +245,7 @@ class Svggenerator {
 				break;
 			case 'ogg':
 				$this->cmdTempwav = sprintf(
-					"%s -Q  %s -o  %s &&  %s -m m -S -f -b 16 --resample 8  %s  %s",
+					"%s -Q	%s -o	%s &&	%s -m m -S -f -b 16 --resample 8 %s %s",
 					$binConf['bin_oggdec'],
 					$inFile,
 					$tmpWav,
@@ -296,128 +294,150 @@ class Svggenerator {
 			$tmpWav
 		);
 
-
 		exec($this->cmdTempwav);
-		
-		
+
 		if(is_file($tmpFileName.'.mp3') === TRUE) {
 			unlink($tmpFileName . ".mp3");
 		}
-		
-		
+
 		if(is_file($tmpFileName.'.wav') === FALSE) {
 			return FALSE;
 		}
 		$values = $this->getWavPeaks($tmpFileName.'.wav');
 		// delete temporary files
-    	
 		unlink($tmpFileName . ".wav");
 		return $values;
 	}
-	
-	
-	private function getWavPeaks($temp_wav)
-	{
+
+	private function getWavPeaks($temp_wav) {
 		ini_set ('memory_limit', '1024M'); // extracted wav-data is very large (500000 entries)
 		/**
-       * Below as posted by "zvoneM" on
-       * http://forums.devshed.com/php-development-5/reading-16-bit-wav-file-318740.html
-       * as findValues() defined above
-       * Translated from Croation to English - July 11, 2011
-       */
-      $data = array();
-      $handle = fopen ($temp_wav, "r");
-      //dohvacanje zaglavlja wav datoteke
-      $heading[] = fread ($handle, 4);
-      $heading[] = bin2hex(fread ($handle, 4));
-      $heading[] = fread ($handle, 4);
-      $heading[] = fread ($handle, 4);
-      $heading[] = bin2hex(fread ($handle, 4));
-      $heading[] = bin2hex(fread ($handle, 2));
-      $heading[] = bin2hex(fread ($handle, 2));
-      $heading[] = bin2hex(fread ($handle, 4));
-      $heading[] = bin2hex(fread ($handle, 4));
-      $heading[] = bin2hex(fread ($handle, 2));
-      $heading[] = bin2hex(fread ($handle, 2));
-      $heading[] = fread ($handle, 4);
-      $heading[] = bin2hex(fread ($handle, 4));
-      
-      //bitrate wav datoteke
-      $peek = hexdec(substr($heading[10], 0, 2));
-      $byte = $peek / 8;
-      
-      //provjera da li se radi o mono ili stereo wavu
-      $channel = hexdec(substr($heading[6], 0, 2));
-      
-      if($channel == 2){
-        $omjer = 40;
-      }
-      else{
-        $omjer = 80;
-      }
+		 * Below as posted by "zvoneM" on
+		 * http://forums.devshed.com/php-development-5/reading-16-bit-wav-file-318740.html
+		 * as findValues() defined above
+		 * Translated from Croation to English - July 11, 2011
+		 */
+		$data = array();
+		$handle = fopen ($temp_wav, "r");
+		//dohvacanje zaglavlja wav datoteke
+		$heading[] = fread ($handle, 4);
+		$heading[] = bin2hex(fread ($handle, 4));
+		$heading[] = fread ($handle, 4);
+		$heading[] = fread ($handle, 4);
+		$heading[] = bin2hex(fread ($handle, 4));
+		$heading[] = bin2hex(fread ($handle, 2));
+		$heading[] = bin2hex(fread ($handle, 2));
+		$heading[] = bin2hex(fread ($handle, 4));
+		$heading[] = bin2hex(fread ($handle, 4));
+		$heading[] = bin2hex(fread ($handle, 2));
+		$heading[] = bin2hex(fread ($handle, 2));
+		$heading[] = fread ($handle, 4);
+		$heading[] = bin2hex(fread ($handle, 4));
 
-      while(!feof($handle)){
-        $bytes = array();
-        //get number of bytes depending on bitrate
-        for ($i = 0; $i < $byte; $i++){
-          $bytes[$i] = fgetc($handle);
-        }
+		//bitrate wav datoteke
+		$peek = hexdec(substr($heading[10], 0, 2));
+		$byte = $peek / 8;
 
-        switch($byte){
-        	
-          //get value for 8-bit wav
-          case 1:
-              $data[] = $this->findValues($bytes[0], $bytes[1]);
-              break;
-			  
-          //get value for 16-bit wav
-          case 2:
-            $temp = (ord($bytes[1]) & 128) ? 0 : 128;
-            $temp = chr((ord($bytes[1]) & 127) + $temp);
-            $data[]= floor($this->findValues($bytes[0], $temp) / 256);
-            break;
-        }
+		//provjera da li se radi o mono ili stereo wavu
+		$channel = hexdec(substr($heading[6], 0, 2));
 
-        //skip bytes for memory optimization
-        fread ($handle, $omjer);
-      }
-      
-      // close and cleanup
-      fclose ($handle);
-	  #return $data;
-	  
-	  return $data;
-	  
+		$ratio = ($channel == 2) ? 40 : 80;
+
+		while(!feof($handle)){
+		$bytes = array();
+		//get number of bytes depending on bitrate
+		for ($i = 0; $i < $byte; $i++){
+			$bytes[$i] = fgetc($handle);
+		}
+
+		switch($byte){
+
+			//get value for 8-bit wav
+			case 1:
+			$newVal = $this->findValues($bytes[0], $bytes[1]) - 128;
+			$data[]= ($newVal < 0) ? 0 : $newVal;
+				break;
+
+			//get value for 16-bit wav
+			case 2:
+			$temp = (ord($bytes[1]) & 128) ? 0 : 128;
+			$temp = chr((ord($bytes[1]) & 127) + $temp);
+			$newVal = floor($this->findValues($bytes[0], $temp) / 256) - 128;
+			$data[]= ($newVal < 0) ? 0 : $newVal;
+			break;
+		}
+
+		//skip bytes for memory optimization
+		fread ($handle, $ratio);
+		}
+
+		// close and cleanup
+		fclose ($handle);
+		#return $data;
+
+		return $data;
+
 	}
 
-    
-	private function limitArray($input, $max = 22000)
-	{
+	private function limitArray($input, $max = 22000) {
+		#echo "<pre>" . print_r($input, 1); die();
 		#echo ini_get('memory_limit'); die();
 		// 512MB is not enough for files > 4hours (XXX entries)
 		# TODO: add a note in documentation
 		ini_set ('memory_limit', '1024M'); // extracted wav-data is very large (500000 entries)
-		$c = count($input);
-		if($c < $max) {
+		$count = count($input);
+		if($count < $max) {
 			return $input;
 		}
-		$f = (floor($c / $max)) + 1;
-		
+		$floor = (floor($count / $max)) + 1;
+
 		$output = array();
 		$prev = 0;
 		$current = 0;
-		
-		for($i = 0; $i < $c; $i++) {
+
+		for($idx = 0; $idx < $count; $idx++) {
 			$current++;
-			$prev = ($input[$i] > $prev) ? $input[$i] : $prev;
-			if($current == $f) {
+			$prev = ($input[$idx] > $prev) ? $input[$idx] : $prev;
+			if($current == $floor) {
 				$output[] = $prev;
 				$current = 0;
 				$prev = 0;
 			}
-			unset($input[$i]);
+			unset($input[$idx]);
 		}
 		return $output;
+	}
+
+	private function beautifyPeaks($input) {
+		$beauty = array();
+		$avg = array_sum($input)/count($input);
+		$maxPeak = max($input);
+
+		// results of visual testing with dozens of random files
+		// maxPeak:128 ->	best multiplicator -> 1.4
+		// maxPeak:82	->	best multiplicator -> 2.3
+
+		// that gives us those guiding values
+		// maxPeak: 128 -> 1.4
+		// maxPeak: 1	 -> 4
+
+		// now try to find the best multiplicator for ($maxPeak/$avg) by playing around...
+		$multiMax = 3.3;
+		$multiMin = 1.4;
+		$multi100th = ($multiMax-$multiMin)/100;
+
+		$rangeMax = 128;
+		$range100th = $rangeMax/100;
+		$invertedRangePercent = 100 - $maxPeak / $range100th;
+		$multiplicator = $multiMin + $invertedRangePercent * $multi100th;
+		foreach($input as $value) {
+			if($value < 1) {
+				$beauty[] = $value;
+				continue;
+			}
+			$beauty[] = floor($value * ($maxPeak/$avg) * $multiplicator);
+		}
+		return $beauty;
 	}
 	public function getCmdTempwav() {
 		return $this->cmdTempwav;

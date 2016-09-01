@@ -66,7 +66,8 @@ class ConfigLoaderINI {
 		}
 
 		//return config
-		return $this->buildConfig($masterConfig, $additionalConfig);
+		$config = $this->buildConfig($masterConfig, $additionalConfig);
+		return $this->postProcess($config);
 	}
 
 	private function prepareFilePath($path = '') {
@@ -79,28 +80,28 @@ class ConfigLoaderINI {
 			return $returnArray;
 		}
 
-		foreach ($array as $key=>$value) {
-			$e = explode(':', $key);
-			if (empty($e[1]) === TRUE) {
+		foreach (array_keys($array) as $key) {
+			$exp = explode(':', $key);
+			if (empty($exp[1]) === TRUE) {
 				$returnArray[$key] = $array[$key];
 				continue;
 			}
 
-			$x = array();
-			foreach ($e as $tk=>$tv) {
-				$x[$tk] = trim($tv);
+			$tmpArray = array();
+			foreach ($exp as $tk=>$tv) {
+				$tmpArray[$tk] = trim($tv);
 			}
-			$x = array_reverse($x, true);
-			foreach ($x as $k=>$v) {
-				$c = $x[0];
-				if (empty($returnArray[$c])) {
-					$returnArray[$c] = array();
+			$tmpArray = array_reverse($tmpArray, true);
+			foreach (array_keys($tmpArray) as $key2) {
+				$newKey = $tmpArray[0];
+				if (empty($returnArray[$newKey])) {
+					$returnArray[$newKey] = array();
 				}
-				if (isset($returnArray[$x[1]])) {
-					$returnArray[$c] = array_merge($returnArray[$c], $returnArray[$x[1]]);
+				if (isset($returnArray[$tmpArray[1]])) {
+					$returnArray[$newKey] = array_merge($returnArray[$newKey], $returnArray[$tmpArray[1]]);
 				}
-				if ($k === 0) {
-					$returnArray[$c] = array_merge($returnArray[$c], $array[$key]);
+				if ($key2 === 0) {
+					$returnArray[$newKey] = array_merge($returnArray[$newKey], $array[$key]);
 				}
 			}
 			$returnArray[$key] = $array[$key];
@@ -114,32 +115,32 @@ class ConfigLoaderINI {
 			 return $returnArray;
 		}
 
-		foreach ($array as $key=>$value) {
+		foreach ($array as $key => $value) {
 			if (is_array($value)) {
 				$array[$key] = $this->recursive_parse($value);
 			}
-			$x = explode('.', $key);
-			if (empty($x[1]) === TRUE) {
+			$varName = explode('.', $key);
+			if (empty($varName[1]) === TRUE) {
 				$returnArray[$key] = $array[$key];
 				continue;
 			}
 
-			$x = array_reverse($x, true);
+			$varName = array_reverse($varName, TRUE);
 			if (isset($returnArray[$key])) {
 				unset($returnArray[$key]);
 			}
-			if (!isset($returnArray[$x[0]])) {
-				$returnArray[$x[0]] = array();
+			if (!isset($returnArray[ $varName[0] ])) {
+				$returnArray[ $varName[0] ] = array();
 			}
-			$first = true;
-			foreach ($x as $k=>$v) {
-				if ($first === true) {
+			$first = TRUE;
+			foreach ($varName as $v) {
+				if ($first === TRUE) {
 					$b = $array[$key];
-					$first = false;
+					$first = FALSE;
 				}
 				$b = array($v=>$b);
 			}
-			$returnArray[$x[0]] = array_replace_recursive($returnArray[$x[0]], $b[$x[0]]);
+			$returnArray[ $varName[0] ] = array_replace_recursive($returnArray[ $varName[0] ], $b[ $varName[0] ]);
 		}
 		return $returnArray;
 	}
@@ -176,18 +177,23 @@ class ConfigLoaderINI {
 				}
 			}
 		}
+		return $config;
+	}
 
+	/**
+	 * override some config values based on other config values
+	 */
+	private function postProcess($config) {
 		if(array_key_exists('destructiveness', $config) === FALSE) {
 			return $config;
 		}
 
 		// override destructiveness values based on specific config key
 		if($config['destructiveness']['disable-all'] === '1') {
-			foreach($config['destructiveness'] as $key => $value) {
+			foreach(array_keys($config['destructiveness']) as $key) {
 				$config['destructiveness'][$key] = ($key === 'disable-all') ? '1' : '0';
 			}
 		}
 		return $config;
 	}
-
 }

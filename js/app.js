@@ -1,11 +1,3 @@
-$.fn.random = function() {
-	return this.eq(Math.floor(Math.random() * this.length));
-};
-
-Array.prototype.max = function() {
-  return Math.max.apply(null, this);
-};
-
 $(document).ready(function() {
 	"use strict";
 	var $ = window.jQuery;
@@ -17,28 +9,6 @@ $(document).ready(function() {
 		drawFaviconTimeout : 0,
 
 		xwax : false,
-
-		/**
-		 * adds get-paramter to url, respecting existing and not-existing params
-		 * TODO: currently not compatible with urlstring that contains a #hash
-		 * @param {string} urlstring
-		 * @param {string} paramName
-		 * @param {string} paramValue
-		 */
-		setGetParameter(urlstring, paramName, paramValue) {
-			if (urlstring.indexOf(paramName + "=") >= 0) {
-				var prefix = urlstring.substring(0, urlstring.indexOf(paramName));
-				var suffix = urlstring.substring(urlstring.indexOf(paramName));
-				suffix = suffix.substring(suffix.indexOf("=") + 1);
-				suffix = (suffix.indexOf("&") >= 0) ? suffix.substring(suffix.indexOf("&")) : "";
-				urlstring = prefix + paramName + "=" + paramValue + suffix;
-			} else {
-				urlstring += (urlstring.indexOf("?") < 0)
-					? "?" + paramName + "=" + paramValue
-					: "&" + paramName + "=" + paramValue;
-			}
-			return urlstring;
-		},
 
 		drawFavicon() {
 			clearTimeout(window.sliMpd.drawFaviconTimeout);
@@ -127,7 +97,7 @@ $(document).ready(function() {
 				rotationX: 90,
 				y: $(".player-mpd").height()/2,
 				z: -5,
-				ease: ease
+				ease
 			};
 			var transformNewPlayerFrom = {
 				transformOrigin: originNew,
@@ -144,7 +114,7 @@ $(document).ready(function() {
 				y:0,
 				z:0,
 				delay:0.02,
-				ease: ease
+				ease
 			};
 
 
@@ -314,14 +284,53 @@ $(document).ready(function() {
 
 	// add some smooth animation on initial loading
 	var timeScale = 1;
+	var basicDelay = 0.15;
 	var TweenMax = window.TweenMax;
 	var Quint = window.Quint;
 	$(window.sliMpd.localPlayer.el).css("z-index",1027);
 	$(window.sliMpd.mpdPlayer.el).css("z-index",1028);
 	$(window.sliMpd.currentPlayer.el).css("z-index",1030);
+
+	//animate basic layout
 	TweenMax.set([$(".permaplayer"), $(".main-nav")],{opacity:1});
-	TweenMax.fromTo($(".main-nav"), 0.75, { y: -$(".main-nav").height() }, { y:0, opacity:1, ease: Quint.easeOut }).timeScale(timeScale);
-	TweenMax.fromTo($("#main"), 1, { scale: 0.97 }, { scale:1, opacity:1, ease: Quint.easeOut, delay: 0.15 }).timeScale(timeScale);
-	//TweenMax.staggerFrom($(".track-row"),2, { y: -30, opacity:0, ease: Quint.easeOut, delay: 0.15 }, 0.2).timeScale(timeScale);
-	TweenMax.fromTo($(".permaplayer"), 0.75, { y: $(window.sliMpd.currentPlayer.el).height() }, { y:0, opacity:1, ease: Quint.easeOut, delay: 1 }).timeScale(timeScale);
+	TweenMax.fromTo($(".main-nav"), 0.75, { force3D:true, z:0.01, rotationZ:0.01, y: -$(".main-nav").height() }, { force3D:true, z:0, rotationZ:0, y:0, opacity:1, ease: Quint.easeOut, delay: basicDelay }).timeScale(timeScale);
+	//TweenMax.fromTo($("#main"), 1, { scale: 1.5, transformOrigin: "top center" }, { scale:1, transformOrigin: "top center", ease: Quint.easeOut, delay: 0.15 }).timeScale(timeScale);
+	//TweenMax.fromTo($("#main"), 0.5, { y:-10, z:0.01, rotationZ: 0.01 }, { force3D:true, z:0.01, rotationZ:0, y:0, ease: Quint.easeOut, delay: basicDelay+0.15 }).timeScale(timeScale);
+	TweenMax.fromTo($("#main"), 0.75, { opacity:0 }, { opacity:1, ease: Cubic.easeOut, delay: basicDelay+0.15 }).timeScale(timeScale);
+	TweenMax.fromTo($(".permaplayer"), 0.75, { y: $(window.sliMpd.currentPlayer.el).height() }, { y:0, opacity:1, ease: Quint.easeOut, delay: basicDelay+1 }).timeScale(timeScale);
+
+	//animate track rows
+	TweenMax.staggerFrom($(".track-row"), 0.75, { force3D:true, rotationZ: 0.01, y: 30, ease: Quint.easeOut, delay: basicDelay+0.35 }, 0.1);
+	TweenMax.staggerFrom($(".track-row"), 0.35, { force3D:true, rotationZ: 0.01, opacity:0, ease: Quint.easeOut, delay: basicDelay+0.35 }, 0.1);
+
+	//click animations
+	$.support.transition = false;
+
+	var blurElement = {a:0};
+
+
+	//
+	$('.overlay-backdrop').on('click', function() {
+			window.sliMpd.modal.$modal.modal("hide");
+	});
+	window.sliMpd.modal.$modal.on('show.bs.modal', function () {
+			TweenMax.to($('.overlay-backdrop'),0.5,{ display: 'block', opacity: 1 });
+			TweenMax.from($('.modal-content'),0.5,{ scaleY:0, ease: Cubic.easeInOut, delay:0.5 });
+			TweenMax.from($('.modal-content h2'),0.25,{ alpha:0, ease: Cubic.easeInOut, delay:0.75 });
+			TweenMax.staggerFrom($('.modal-content .row'), 0.5,{ y:40, opacity: 0, ease: Cubic.easeOut, delay: 0.75 }, 0.05);
+			//TweenMax.to(blurElement, 0, {a:10, onUpdate: applyBlur, ease: Expo.easeOut});
+			//TweenMax.set([$('.container'), $('.permaplayer')], { webkitFilter:"blur(" + 4 + "px)", filter:"blur(" + 4 + "px)"});
+	});
+	window.sliMpd.modal.$modal.on('hide.bs.modal', function () {
+			TweenMax.to($('.overlay-backdrop'),0.25,{ display: 'none', opacity: 0 });
+			//TweenMax.to(blurElement, 0, {a:0, onUpdate: applyBlur, ease: Expo.easeOut});
+			//TweenMax.set([$('.container'), $('.permaplayer')], { webkitFilter:"blur(" + 0 + "px)", filter:"blur(" + 0 + "px)"});
+
+	});
+
+	function applyBlur()
+	{
+			TweenMax.set([$('.container'), $('.permaplayer')], { webkitFilter:"blur(" + blurElement.a + "px)", filter:"blur(" + blurElement.a + "px)"});
+	}
+
 });
